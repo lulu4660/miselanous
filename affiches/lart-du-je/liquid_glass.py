@@ -20,7 +20,7 @@ only = int(sys.argv[sys.argv.index('--only') + 1]) if '--only' in sys.argv[:-1] 
 # ---- tunables (CSS px unless noted) ----
 REFRACT = 1.5        # displacement at the very rim, as a fraction of bezel width
 POWER = 2.0           # how fast displacement falls off inward (higher = tighter to edge)
-DISPERSION = (1.0, 1.16, 1.34)   # R, G, B displacement multipliers -> rainbow fringe
+DISPERSION = (1.0, 1.09, 1.19)   # R, G, B displacement multipliers -> rainbow fringe
 FROST_SIGMA = 5.0     # interior blur for text panels
 FROST_MIX = 0.62
 CLEAR_SIGMA = 1.2     # tiny blur everywhere so the glass isn't razor-sharp
@@ -93,7 +93,7 @@ for i, g in enumerate(geo):
     d = np.clip(-sdf, 0, None)                                  # depth inside, px
     t = np.clip(d / B, 0, 1)                                    # 0 at rim -> 1 past bezel
     disp = REFRACT * B * (1 - t) ** POWER                       # displacement magnitude
-    disp *= smoothstep(0.0, 1.5 * S, d)                         # fade to 0 at the very rim: no hard plugs
+    disp *= smoothstep(0.0, 0.25 * B, d)                        # fade to 0 at the very rim: no hard plugs
 
     src = img if nested else scene  # nested panels (logo lens) refract their parent glass; others only the scene
     srcb = gaussian_filter(src[y0:y1, x0:x1], sigma=(CLEAR_SIGMA * S, CLEAR_SIGMA * S, 0))
