@@ -3,7 +3,7 @@
 # Sources vérifiées depuis le catalogue uwarp.design/agent-skills (gratuites / open source uniquement).
 #
 #   bash setup-creative-kit.sh                     -> affiche le plan, demande "y" avant d'installer
-#   bash setup-creative-kit.sh --with-impeccable   -> ajoute aussi Impeccable (voir avertissement)
+#   bash setup-creative-kit.sh --no-impeccable     -> tout sauf Impeccable (pas de hooks à chaque édition)
 #
 # Tout est réversible : plugins -> `claude plugin uninstall`, skills -> `npx skills remove -g`,
 # MCP -> `claude mcp remove playwright -s user`. Sauvegardes .bak-<date> faites avant écriture.
@@ -11,8 +11,8 @@ set -euo pipefail
 
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-WITH_IMPECCABLE=0
-[ "${1:-}" = "--with-impeccable" ] && WITH_IMPECCABLE=1
+WITH_IMPECCABLE=1
+[ "${1:-}" = "--no-impeccable" ] && WITH_IMPECCABLE=0
 export DO_NOT_TRACK=1 DISABLE_TELEMETRY=1   # pas de télémétrie pour le CLI "skills"
 
 SKILLS_CLI="skills@1.9.0"
@@ -25,7 +25,7 @@ PLUGINS=(
   "nextlevelbuilder/ui-ux-pro-max-skill|ui-ux-pro-max@ui-ux-pro-max-skill|Base de 80 styles, 192 palettes, 74 paires de polices, logos, design system"
   "heygen-com/hyperframes|hyperframes@hyperframes|Vidéo en HTML -> MP4 : motion design, sous-titres, voix off, slideshows, capture de site"
 )
-[ "$WITH_IMPECCABLE" = 1 ] && PLUGINS+=("pbakaus/impeccable|impeccable@impeccable|Polish UI (24 commandes /impeccable ...) — ajoute des hooks à chaque édition")
+[ "$WITH_IMPECCABLE" = 1 ] && PLUGINS+=("pbakaus/impeccable|impeccable@impeccable|Finition UI : 24 commandes (/impeccable polish, audit, ...) + 5 agents. Ajoute des hooks : vérif UI après chaque Edit/Write, passe design en fin de tour (télécharge son moteur depuis GitHub au 1er lancement)")
 
 # repo GitHub | skills (séparés par des virgules) | à quoi ça sert
 SKILLS=(
@@ -65,7 +65,7 @@ say "Serveur MCP :"
 say "  + playwright ($PLAYWRIGHT_MCP) : Claude ouvre tes pages dans un navigateur, fait des captures, vérifie le rendu"
 say "Agent :"
 say "  + $CLAUDE_DIR/agents/design-critic.md (opus, lecture seule) : critique visuelle d'un site / d'une affiche / d'une vidéo rendue"
-[ "$WITH_IMPECCABLE" = 0 ] && say "(Impeccable non inclus : relance avec --with-impeccable si tu le veux.)"
+[ "$WITH_IMPECCABLE" = 0 ] && say "(Impeccable exclu via --no-impeccable.)"
 say ""
 say "Fichiers sauvegardés avant modification : $CLAUDE_DIR/settings.json, ~/.claude.json"
 read -r -p "Installer ? [y/N] " ans
