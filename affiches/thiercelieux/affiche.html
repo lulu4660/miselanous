@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Thiercelieux — Affiche</title>
+<style>
+  @font-face{font-family:Gloock; src:url(fonts/Gloock-Regular.ttf)}
+  @font-face{font-family:'Instrument Serif'; font-style:italic; src:url(fonts/InstrumentSerif-Italic.ttf)}
+  @font-face{font-family:'Big Shoulders'; font-weight:700; src:url(fonts/BigShoulders-Bold.ttf)}
+  @font-face{font-family:'DM Mono'; src:url(fonts/DMMono-Regular.ttf)}
+  @font-face{font-family:'Instrument Sans'; font-weight:400; src:url(fonts/InstrumentSans-Regular.ttf)}
+  @font-face{font-family:'Instrument Sans'; font-weight:700; src:url(fonts/InstrumentSans-Bold.ttf)}
+  :root{ --soot:#0f0d0c; --bone:#eadfc8; --bone-dim:#b9ad96; --blood:#d4532f; --blood-deep:#9c3420; --hair:rgba(234,223,200,.28); }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--soot)}
+  .poster{position:relative; width:1240px; height:1754px; overflow:hidden; background:var(--soot); color:var(--bone)}
+  .mono{font-family:'DM Mono',monospace; font-size:17px; letter-spacing:.16em; text-transform:uppercase; color:var(--bone-dim)}
+  .art{position:absolute; inset:0}
+  .grain{position:absolute; inset:0; pointer-events:none; mix-blend-mode:screen; opacity:.10;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' seed='9'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");}
+
+  .top{position:absolute; left:72px; right:72px; top:62px; display:flex; justify-content:space-between}
+  .title{position:absolute; left:72px; right:72px; top:1036px; font-family:Gloock,serif; font-size:176px; line-height:1; letter-spacing:-.022em; color:var(--bone)}
+  .sub{position:absolute; left:76px; top:1216px; font-family:'Instrument Serif',serif; font-style:italic; font-size:104px; line-height:1; color:var(--blood)}
+  .rule{position:absolute; left:72px; right:72px; height:1px; background:var(--hair)}
+  .r1{top:1346px} .r2{top:1586px}
+
+  .date{position:absolute; left:72px; top:1372px; width:360px}
+  .date .d{font-family:'Big Shoulders',sans-serif; font-weight:700; font-size:196px; line-height:.8; color:var(--blood); display:inline-block}
+  .date .m{font-family:'Big Shoulders',sans-serif; font-weight:700; font-size:84px; line-height:.8; color:var(--bone); display:inline-block; margin-left:10px}
+  .date .mono{margin-bottom:14px}
+
+  .sessions{position:absolute; left:470px; right:72px; top:1372px}
+  .s{display:grid; grid-template-columns:132px 1fr auto; align-items:baseline; height:96px; border-bottom:1px solid var(--hair)}
+  .s:last-child{border-bottom:none}
+  .s .h{font-family:'Big Shoulders',sans-serif; font-weight:700; font-size:70px; line-height:1; color:var(--blood)}
+  .s .who{font-family:'Instrument Sans',sans-serif; font-weight:700; font-size:36px; letter-spacing:-.005em}
+  .s .p{font-family:'Big Shoulders',sans-serif; font-weight:700; font-size:70px; line-height:1}
+  .sessions .mono{margin-bottom:6px}
+
+  .foot{position:absolute; left:72px; right:72px; top:1612px; height:96px; display:flex; align-items:center; justify-content:space-between}
+  .resa .tel{font-family:'Big Shoulders',sans-serif; font-weight:700; font-size:66px; line-height:1; letter-spacing:.01em; margin-top:6px}
+  .place{font-family:'Instrument Sans',sans-serif; font-size:24px; line-height:1.35; color:var(--bone); text-align:center}
+  .place b{font-weight:700}
+  .logos{display:flex; align-items:center; gap:14px; background:#dfd3b8; border-radius:14px; padding:8px 14px}
+  .logos img{height:64px; display:block}
+  .logos .r{border-radius:50%}
+  .logos{opacity:.86}
+</style>
+</head>
+<body>
+<div class="poster">
+  <svg class="art" viewBox="0 0 1240 1754" aria-hidden="true">
+    <defs>
+      <radialGradient id="lit" cx="66%" cy="30%" r="80%">
+        <stop offset="0" stop-color="#ee7a4f"/><stop offset=".55" stop-color="#d4532f"/><stop offset="1" stop-color="#8f2f1c"/>
+      </radialGradient>
+      <pattern id="dots" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(18)">
+        <circle cx="3.5" cy="3.5" r="1.45" fill="#5b1d12"/>
+      </pattern>
+      <filter id="maria" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency=".018" numOctaves="3" seed="11" result="n"/>
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="46" xChannelSelector="R" yChannelSelector="G" result="d"/>
+        <feGaussianBlur in="d" stdDeviation="3"/>
+      </filter>
+      <mask id="mariaMask"><g fill="#fff" filter="url(#maria)">
+        <!-- Oceanus Procellarum --><ellipse cx="400" cy="600" rx="120" ry="210" transform="rotate(12 400 600)"/>
+        <!-- Mare Imbrium --><ellipse cx="500" cy="430" rx="120" ry="95"/>
+        <!-- Mare Frigoris --><ellipse cx="590" cy="300" rx="190" ry="30" transform="rotate(-6 590 300)"/>
+        <!-- Mare Serenitatis --><ellipse cx="680" cy="430" rx="62" ry="58"/>
+        <!-- Mare Tranquillitatis --><ellipse cx="755" cy="545" rx="85" ry="66" transform="rotate(-15 755 545)"/>
+        <!-- Mare Crisium --><ellipse cx="910" cy="470" rx="42" ry="50"/>
+        <!-- Mare Fecunditatis --><ellipse cx="850" cy="660" rx="58" ry="80" transform="rotate(10 850 660)"/>
+        <!-- Mare Nectaris --><ellipse cx="760" cy="700" rx="34" ry="38"/>
+        <!-- Mare Nubium --><ellipse cx="560" cy="760" rx="80" ry="58"/>
+        <!-- Mare Humorum --><ellipse cx="430" cy="790" rx="40" ry="40"/>
+        <!-- Mare Vaporum + Insularum --><ellipse cx="590" cy="560" rx="70" ry="40"/>
+      </g></mask>
+      <clipPath id="disc"><circle cx="620" cy="590" r="400"/></clipPath>
+      <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+        <stop offset=".62" stop-color="#d4532f" stop-opacity=".22"/><stop offset="1" stop-color="#d4532f" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+
+    <!-- halo -->
+    <circle cx="620" cy="590" r="560" fill="url(#glow)"/>
+    <!-- the moon: night of 24 Oct 2026, age 13.4 d: a sliver of shadow on the western limb -->
+    <g clip-path="url(#disc)">
+      <rect x="200" y="170" width="840" height="840" fill="url(#lit)"/>
+      <rect x="200" y="170" width="840" height="840" fill="url(#dots)" mask="url(#mariaMask)" opacity=".85"/>
+      <path id="terminator" fill="#0f0d0c" opacity=".92"/>
+    </g>
+
+    <!-- three cuts -->
+    <g fill="#0f0d0c" clip-path="url(#disc)">
+      <path d="M 884 250 C 874 330, 806 480, 648 748 C 822 500, 900 330, 884 250 Z"/>
+      <path d="M 952 306 C 940 400, 868 566, 700 842 C 884 586, 970 410, 952 306 Z"/>
+      <path d="M 1008 398 C 994 486, 936 618, 800 826 C 952 640, 1024 500, 1008 398 Z"/>
+    </g>
+
+    <!-- village of the night: roofs, steeple, trees -->
+    <path id="village" fill="#0f0d0c" d=""/>
+    <g id="windows" fill="#eadfc8"></g>
+
+    <!-- observation strip -->
+    <g id="phases"></g>
+  </svg>
+
+  <div class="top mono"><span>L’Atelier × L’Art du Je</span><span>Loup-garou immersif</span></div>
+
+  <h1 class="title">Thiercelieux,</h1>
+  <p class="sub">en chair et en os</p>
+
+  <div class="rule r1"></div>
+  <div class="date"><div class="mono">Samedi</div><span class="d">24</span><span class="m">OCT.</span></div>
+  <div class="sessions">
+    <div class="s"><span class="h">17 h</span><span class="who">Enfants et ados</span><span class="p">5 €</span></div>
+    <div class="s"><span class="h">20 h</span><span class="who">Adultes uniquement</span><span class="p">7 €</span></div>
+  </div>
+  <div class="rule r2"></div>
+
+  <div class="foot">
+    <div class="resa"><div class="mono">Sur réservation</div><div class="tel">06 37 43 88 00</div></div>
+    <div class="place"><b>Salle Mogador</b><br>Montréal-la-Cluse<br><span style="color:var(--bone-dim)">Petite restauration</span></div>
+    <div class="logos"><img src="logo_atelier.png" alt="L’Atelier"><img class="r" src="logo_rond.png" alt="L’Art du Je"></div>
+  </div>
+
+  <div class="grain"></div>
+</div>
+<script>
+const NS='http://www.w3.org/2000/svg', SYN=29.530588853;
+// lit-shape of a waxing moon (lit on the east/right limb) for a given age in days
+function litPath(cx,cy,r,age){
+  const th=2*Math.PI*age/SYN, rx=Math.abs(r*Math.cos(th)), gib=th>Math.PI/2;
+  return `M${cx},${cy-r} A${r},${r} 0 0 1 ${cx},${cy+r} A${rx},${r} 0 0 ${gib?1:0} ${cx},${cy-r} Z`;
+}
+// shadow on the big disc = complement of the lit shape (only a sliver at age 13.45)
+(function(){
+  const cx=620,cy=590,r=400,age=13.45, th=2*Math.PI*age/SYN, rx=Math.abs(r*Math.cos(th));
+  document.getElementById('terminator').setAttribute('d',
+    `M${cx},${cy-r} A${r},${r} 0 0 0 ${cx},${cy+r} A${rx},${r} 0 0 1 ${cx},${cy-r} Z`);
+})();
+// observation strip: the seven evenings leading to the 24th
+(function(){
+  const g=document.getElementById('phases'); const y=126, r=15, x0=330, step=96;
+  const line=document.createElementNS(NS,'line'); Object.entries({x1:x0-40,x2:x0+6*step+40,y1:y,y2:y,stroke:'#eadfc8','stroke-opacity':.22}).forEach(([k,v])=>line.setAttribute(k,v)); g.appendChild(line);
+  for(let i=0;i<7;i++){
+    const day=18+i, age=7.45+i, cx=x0+i*step;
+    const base=document.createElementNS(NS,'circle'); Object.entries({cx,cy:y,r,fill:'#0f0d0c',stroke:'#eadfc8','stroke-opacity':.35}).forEach(([k,v])=>base.setAttribute(k,v)); g.appendChild(base);
+    const lit=document.createElementNS(NS,'path'); lit.setAttribute('d',litPath(cx,y,r,age)); lit.setAttribute('fill', i===6?'#d4532f':'#eadfc8'); g.appendChild(lit);
+    const t=document.createElementNS(NS,'text'); Object.entries({x:cx,y:y+42,'text-anchor':'middle','font-family':'DM Mono','font-size':14,'letter-spacing':1.5,fill:i===6?'#d4532f':'#b9ad96'}).forEach(([k,v])=>t.setAttribute(k,v)); t.textContent=`${day}·10`; g.appendChild(t);
+  }
+})();
+// village silhouette: deterministic, hand-tuned
+(function(){
+  const base=1012; let d=`M0,${base} L0,930 `;
+  const pts=[
+    // trees left (pointed firs)
+    [0,930],[28,880],[52,936],[70,870],[98,934],[118,890],[138,940],
+    // house 1
+    [150,940],[150,900],[196,862],[242,900],[242,940],
+    // house 2 tall
+    [262,940],[262,880],[300,846],[338,880],[338,940],
+    // low wall
+    [338,950],[380,950],
+    // church nave + steeple
+    [380,940],[380,890],[430,860],[470,860],[470,800],[488,770],[492,720],[496,770],[514,800],[514,860],[540,880],[540,940],
+    // houses cluster
+    [560,940],[560,905],[600,878],[640,905],[640,925],[668,925],[668,890],[712,858],[756,890],[756,940],
+    // mill / tower
+    [776,940],[776,872],[810,856],[844,872],[844,940],
+    // houses right
+    [862,940],[862,910],[900,884],[938,910],[938,940],[956,940],[956,896],[1000,866],[1044,896],[1044,946],
+    // firs right
+    [1060,946],[1084,880],[1106,944],[1124,868],[1150,942],[1172,890],[1196,946],[1218,900],[1240,948]
+  ];
+  pts.forEach(([x,y])=>d+=`L${x},${y} `);
+  d+=`L1240,${base} L1240,1754 L0,1754 Z`;
+  document.getElementById('village').setAttribute('d',d);
+  const w=document.getElementById('windows');
+  [[186,904,10,14],[316,890,9,13],[606,904,10,13],[700,894,9,14],[730,894,9,14],[902,914,10,12],[1010,904,10,13],[488,812,8,16]].forEach(([x,y,ww,hh],i)=>{
+    const r=document.createElementNS(NS,'rect'); Object.entries({x,y,width:ww,height:hh,opacity:i%3===0?.95:.7}).forEach(([k,v])=>r.setAttribute(k,v)); w.appendChild(r);});
+})();
+</script>
+</body>
+</html>
