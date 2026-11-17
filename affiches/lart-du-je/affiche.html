@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>L'Art du Je — Affiche</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,900;1,700;1,900&family=Oswald:wght@400;500;600&family=Cormorant+Garamond:ital,wght@1,600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --velvet-1:#0b3a22; --velvet-2:#041a0e; --velvet-3:#11532f;
+    --gold:#e9b44c; --gold-2:#f6d58a; --cream:#f5ecd6; --ink:#0a1a11; --red:#d8473a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#000}
+  .poster{position:relative; width:1240px; height:1754px; overflow:hidden;
+    background:radial-gradient(110% 70% at 50% 30%, #143523 0%, #07140c 55%, #030805 100%);
+    color:var(--cream); font-family:'Oswald',sans-serif;}
+  /* velvet curtains: folds + sheen + fade */
+  .curtain{position:absolute; top:0; height:1080px; width:290px;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,.05), rgba(0,0,0,0) 30%, rgba(0,0,0,.35)),
+      repeating-linear-gradient(90deg,
+        var(--velvet-2) 0px, var(--velvet-1) 14px, var(--velvet-3) 27px, #1a6b3e 31px,
+        var(--velvet-3) 35px, var(--velvet-1) 48px, var(--velvet-2) 62px);
+    -webkit-mask-image:linear-gradient(180deg,#000 75%,transparent 100%); mask-image:linear-gradient(180deg,#000 75%,transparent 100%);
+    filter:saturate(.9);}
+  .curtain.left{left:0; clip-path:polygon(0 0,100% 0,64% 52%,26% 100%,0 100%);}
+  .curtain.right{right:0; clip-path:polygon(0 0,100% 0,100% 100%,74% 100%,36% 52%);}
+  .valance,.trim{position:absolute; top:0; left:-31px; right:-31px;
+    -webkit-mask:radial-gradient(62px 34px at 50% 0,#000 98%,transparent 100%) 0 var(--h)/124px 34px repeat-x, linear-gradient(#000,#000) 0 0/100% var(--h) no-repeat;
+            mask:radial-gradient(62px 34px at 50% 0,#000 98%,transparent 100%) 0 var(--h)/124px 34px repeat-x, linear-gradient(#000,#000) 0 0/100% var(--h) no-repeat;}
+  .trim{--h:98px; height:132px; background:linear-gradient(90deg,#8a6420,var(--gold-2),#a87a2a,var(--gold-2),#8a6420);}
+  .valance{--h:92px; height:126px;
+    background:linear-gradient(180deg,rgba(0,0,0,.35),rgba(0,0,0,0) 40%,rgba(0,0,0,.25)),
+      repeating-linear-gradient(90deg, var(--velvet-2) 0 10px, var(--velvet-3) 24px, var(--velvet-2) 40px);}
+  .shadow{position:absolute; top:0; left:0; right:0; height:190px; background:linear-gradient(180deg,rgba(0,0,0,.55),transparent);}
+  /* soft spotlight */
+  .beam{position:absolute; left:50%; top:40px; width:980px; height:1000px; transform:translateX(-50%);
+    background:linear-gradient(180deg, rgba(246,213,138,.24), rgba(246,213,138,.05) 80%, rgba(246,213,138,0));
+    clip-path:polygon(43% 0,57% 0,100% 100%,0 100%); filter:blur(28px);}
+  .pool{position:absolute; left:50%; top:600px; width:1000px; height:260px; transform:translateX(-50%);
+    background:radial-gradient(closest-side, rgba(246,213,138,.22), rgba(246,213,138,0));}
+
+  .center{position:absolute; left:0; right:0; text-align:center;}
+  .kicker{top:170px; font-weight:500; letter-spacing:.28em; font-size:28px; color:var(--gold); text-transform:uppercase;}
+  .kicker span{color:var(--cream); opacity:.6; margin:0 .35em}
+  .logo{position:absolute; left:50%; top:232px; width:340px; height:340px; transform:translateX(-50%);
+    border-radius:50%; background:var(--cream); overflow:hidden;
+    box-shadow:0 0 0 6px var(--gold), 0 0 0 12px rgba(4,26,14,.95), 0 26px 60px rgba(0,0,0,.6), 0 0 120px rgba(246,213,138,.25);}
+  .logo img{width:100%; height:100%; display:block; mix-blend-mode:multiply;}
+  .brand{top:604px; font-family:'Playfair Display',serif; font-weight:900; font-size:156px; line-height:1; letter-spacing:-.015em;
+    color:var(--cream); text-shadow:0 6px 34px rgba(0,0,0,.7);}
+  .brand em{font-style:italic; color:var(--gold-2); font-weight:900}
+  .slogan{top:792px; font-family:'Playfair Display',serif; font-style:italic; font-weight:700; font-size:64px; color:var(--gold-2);}
+  .tagline{top:884px; font-family:'Cormorant Garamond',serif; font-style:italic; font-weight:600; font-size:42px; color:var(--cream); opacity:.92}
+  .tagline b{color:var(--gold-2); font-weight:600}
+
+  .title-bar{position:absolute; top:1010px; left:90px; right:90px; display:flex; align-items:center; gap:28px;}
+  .title-bar i{flex:1; height:2px; background:linear-gradient(90deg, transparent, var(--gold));}
+  .title-bar i:last-child{background:linear-gradient(90deg, var(--gold), transparent);}
+  .title-bar h2{font-weight:600; font-size:46px; letter-spacing:.14em; text-transform:uppercase; color:var(--gold);}
+  .ages{position:absolute; top:1100px; left:90px; right:90px; display:grid; grid-template-columns:repeat(3,1fr); gap:28px;}
+  .age{border:2px solid rgba(233,180,76,.7); border-radius:18px; padding:30px 10px 28px; text-align:center; background:rgba(3,10,6,.75);}
+  .age .who{font-family:'Playfair Display',serif; font-weight:900; font-size:60px; color:var(--cream); line-height:1}
+  .age .yrs{margin-top:14px; font-size:36px; font-weight:500; letter-spacing:.08em; color:var(--gold-2)}
+  .also{top:1330px; font-size:38px; font-weight:500; letter-spacing:.16em; text-transform:uppercase; color:var(--gold)}
+  .also span{color:var(--red); margin:0 .45em; font-size:.8em; vertical-align:.08em}
+  .cta{top:1418px; font-family:'Cormorant Garamond',serif; font-style:italic; font-weight:600; font-size:44px; color:var(--cream)}
+
+  .footer{position:absolute; bottom:0; left:0; right:0; height:236px; background:var(--gold);
+    display:flex; align-items:center; justify-content:space-between; padding:0 90px 18px; color:var(--ink);}
+  .footer .place{font-size:34px; font-weight:500; line-height:1.25; letter-spacing:.03em}
+  .footer .place b{display:block; font-size:40px; font-weight:600; text-transform:uppercase; letter-spacing:.06em}
+  .footer .contact{text-align:right; line-height:1.15}
+  .footer .tel{font-family:'Playfair Display',serif; font-weight:900; font-size:76px; font-variant-numeric:lining-nums}
+  .footer .ig{font-size:38px; font-weight:600; letter-spacing:.03em; margin-top:6px}
+  .footer svg{width:34px; height:34px; vertical-align:-5px; margin-right:8px}
+</style>
+</head>
+<body>
+<div class="poster">
+  <div class="beam"></div>
+  <div class="pool"></div>
+  <div class="curtain left"></div>
+  <div class="curtain right"></div>
+  <div class="shadow"></div>
+  <div class="trim"></div>
+  <div class="valance"></div>
+
+  <p class="center kicker">Professeur de théâtre<span>·</span>Oyonnax &amp; alentours</p>
+  <div class="logo"><img src="logo_rond.png" alt="Logo L'Art du Je"></div>
+  <h1 class="center brand">L'Art du <em>Je</em></h1>
+  <p class="center slogan">Entre en scène.</p>
+  <p class="center tagline">Ici, le jeu commence par <b>Je</b>.</p>
+
+  <div class="title-bar"><i></i><h2>Cours de théâtre à l'année</h2><i></i></div>
+  <div class="ages">
+    <div class="age"><div class="who">Enfants</div><div class="yrs">7 – 11 ANS</div></div>
+    <div class="age"><div class="who">Ados</div><div class="yrs">12 – 16 ANS</div></div>
+    <div class="age"><div class="who">Adultes</div><div class="yrs">DÈS 17 ANS</div></div>
+  </div>
+  <p class="center also">Spectacles<span>✦</span>Impro<span>✦</span>Scène ouverte</p>
+  <p class="center cta">Renseignements &amp; inscriptions :</p>
+
+  <div class="footer">
+    <div class="place"><b>Salle Mogador</b>Montréal-la-Cluse</div>
+    <div class="contact">
+      <div class="tel">06 37 43 88 00</div>
+      <div class="ig"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/></svg>@lart.du.je</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
