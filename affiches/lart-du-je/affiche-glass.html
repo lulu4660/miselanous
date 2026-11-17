@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>L'Art du Je — Affiche Liquid Glass</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,800;1,900&display=swap" rel="stylesheet">
+<style>
+  :root{ --emerald:#0b3d26; --deep:#03140b; --gold:#f2c35b; --coral:#ff6b4a; --mint:#5fe0a8; --ink:#04120a; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#000}
+  .poster{position:relative; width:1240px; height:1754px; overflow:hidden; font-family:'Inter Tight',sans-serif; color:#fff;
+    background:radial-gradient(120% 90% at 50% 0%, #0f4a2e 0%, #062416 45%, var(--deep) 100%);}
+
+  /* ---------- background scene (what the glass refracts) ---------- */
+  .orb{position:absolute; border-radius:50%;}
+  .o1{width:470px; height:470px; left:-150px; top:40px; background:radial-gradient(circle at 35% 30%, #ffe7a3, #f5b443 55%, #d9861f 100%); box-shadow:0 0 90px rgba(245,180,67,.45);}
+  .o2{width:440px; height:440px; right:-140px; top:640px; background:radial-gradient(circle at 35% 30%, #ffa184, #ec5233 55%, #b8301a 100%); box-shadow:0 0 90px rgba(236,82,51,.4);}
+  .o3{width:520px; height:520px; left:-190px; top:1230px; background:radial-gradient(circle at 35% 30%, #8af2c6, #23b071 55%, #0d6d43 100%); box-shadow:0 0 90px rgba(35,176,113,.35);}
+  .o4{width:300px; height:300px; right:-150px; top:1600px; background:radial-gradient(circle at 35% 30%, #ffe7a3, #f5b443 55%, #d9861f 100%); box-shadow:0 0 70px rgba(245,180,67,.35);}
+  .o5{width:170px; height:170px; left:600px; top:1190px; background:radial-gradient(circle at 35% 30%, #ffa184, #ec5233 60%, #b8301a 100%);}
+  .beams{position:absolute; inset:0; opacity:.5;
+    background:repeating-linear-gradient(115deg, transparent 0 120px, rgba(255,230,170,.10) 120px 150px, transparent 150px 260px);}
+  .velvet{position:absolute; top:0; bottom:0; width:260px; opacity:.8;
+    background:repeating-linear-gradient(90deg,#03170c 0 12px,#0e4a2b 24px,#1d7a49 29px,#0e4a2b 34px,#03170c 48px);
+    -webkit-mask-image:linear-gradient(180deg,#000,transparent 80%); mask-image:linear-gradient(180deg,#000,transparent 80%);}
+  .velvet.l{left:0} .velvet.r{right:0}
+  .ring{position:absolute; left:50%; top:150px; width:1180px; height:1180px; transform:translateX(-50%); border-radius:50%;
+    border:6px solid rgba(255,220,150,.55); box-shadow:0 0 80px rgba(255,210,120,.25), inset 0 0 80px rgba(255,210,120,.12);}
+  .masks-bg{position:absolute; left:50%; top:250px; width:640px; transform:translateX(-50%) rotate(-8deg); opacity:.22; filter:grayscale(.2) contrast(1.1);
+    -webkit-mask-image:radial-gradient(circle, #000 55%, transparent 72%); mask-image:radial-gradient(circle, #000 55%, transparent 72%);}
+  .grain{position:absolute; inset:0; opacity:.08; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");}
+
+  /* ---------- liquid glass material ---------- */
+  .glass{position:absolute; isolation:isolate;
+    background:linear-gradient(150deg, rgba(255,255,255,.22) 0%, rgba(255,255,255,.08) 40%, rgba(255,255,255,.04) 60%, rgba(255,255,255,.14) 100%), rgba(0,18,9,.22);
+    -webkit-backdrop-filter:url(#liquid) blur(11px) saturate(180%) brightness(1.05); backdrop-filter:url(#liquid) blur(11px) saturate(180%) brightness(1.05);
+    text-shadow:0 1px 3px rgba(0,0,0,.35);
+    box-shadow:
+      inset 0 3px 1px rgba(255,255,255,.85), inset 0 0 0 1px rgba(255,255,255,.25),
+      inset 0 -2px 2px rgba(255,255,255,.18),
+      inset 2px 0 2px rgba(255,255,255,.22),
+      inset -2px 0 2px rgba(255,255,255,.10),
+      inset 0 0 40px rgba(255,255,255,.06),
+      0 30px 60px rgba(0,0,0,.35), 0 8px 18px rgba(0,0,0,.25);}
+  /* specular rim: bright top-left, fading, bright again bottom-right */
+  .glass::before{content:""; position:absolute; inset:0; border-radius:inherit; padding:3.5px; z-index:-1;
+    background:linear-gradient(135deg, rgba(255,255,255,.95), rgba(255,255,255,.15) 30%, rgba(255,255,255,0) 50%, rgba(255,255,255,.12) 70%, rgba(255,255,255,.7));
+    -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude;}
+  /* soft top sheen */
+  .glass::after{content:""; position:absolute; inset:0; border-radius:inherit; z-index:-1;
+    background:radial-gradient(120% 60% at 30% -10%, rgba(255,255,255,.18), rgba(255,255,255,0) 60%); pointer-events:none;}
+
+  /* ---------- layout ---------- */
+  .pill-top{left:50%; top:86px; transform:translateX(-50%); height:76px; padding:0 40px; border-radius:999px;
+    display:flex; align-items:center; gap:18px; white-space:nowrap; font-size:28px; font-weight:600; letter-spacing:.01em;}
+  .dot{width:12px; height:12px; border-radius:50%; background:var(--mint); box-shadow:0 0 14px var(--mint);}
+  .pill-top .sep{opacity:.5}
+
+  .hero{left:70px; right:70px; top:206px; height:820px; border-radius:72px; text-align:center;}
+  .lens{position:absolute; left:50%; top:62px; width:330px; height:330px; transform:translateX(-50%); border-radius:50%;}
+  .lens .disc{position:absolute; inset:22px; border-radius:50%; overflow:hidden; background:#f7f1e3;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.08), 0 10px 30px rgba(0,0,0,.25);}
+  .lens img{width:100%; height:100%; display:block; mix-blend-mode:multiply;}
+  .brand{position:absolute; left:0; right:0; top:420px; font-size:150px; font-weight:900; letter-spacing:-.028em; line-height:1;
+    text-shadow:0 4px 30px rgba(0,0,0,.25);}
+  .brand em{font-style:italic; padding-right:.06em; text-shadow:none; filter:drop-shadow(0 4px 18px rgba(0,0,0,.3));
+    background:linear-gradient(180deg,#fff7dc 0%,#ffdc85 50%,#f5b041 100%); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .slogan{position:absolute; left:0; right:0; top:600px; font-size:56px; font-weight:700; letter-spacing:-.02em;}
+  .tagline{position:absolute; left:0; right:0; top:680px; font-size:36px; font-weight:500; color:rgba(255,255,255,.82);}
+  .tagline b{color:#ffd77a; font-weight:700}
+
+  .section{position:absolute; left:0; right:0; top:1068px; text-align:center; font-size:30px; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:rgba(255,255,255,.9)}
+  .tile{top:1130px; width:340px; height:220px; border-radius:52px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;}
+  .t1{left:70px} .t2{left:450px} .t3{left:830px}
+  .tile .ico{width:58px; height:58px; border-radius:18px; display:grid; place-items:center; font-size:30px;
+    background:linear-gradient(160deg, rgba(255,255,255,.55), rgba(255,255,255,.15)); box-shadow:inset 0 1px 1px #fff, 0 6px 14px rgba(0,0,0,.2);}
+  .tile .who{font-size:58px; font-weight:800; letter-spacing:-.03em; line-height:1}
+  .tile .yrs{font-size:34px; font-weight:700; color:#fff3d1; opacity:.95}
+
+  .chips{position:absolute; left:0; right:0; top:1390px; display:flex; justify-content:center; gap:22px;}
+  .chip{position:relative; height:74px; padding:0 34px; border-radius:999px; display:flex; align-items:center; font-size:32px; font-weight:700;}
+
+  .dock{left:70px; right:70px; bottom:70px; height:196px; border-radius:60px; display:flex; align-items:center; justify-content:space-between; padding:0 50px;}
+  .dock .place{font-size:30px; font-weight:500; color:rgba(255,255,255,.85); line-height:1.3}
+  .dock .place b{display:block; color:#fff; font-size:38px; font-weight:800; letter-spacing:-.01em}
+  .dock .cta{font-size:24px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:#ffd77a; margin-bottom:6px}
+  .call{text-align:right}
+  .call .tel{font-size:68px; font-weight:900; letter-spacing:-.02em; line-height:1; font-variant-numeric:tabular-nums}
+  .call .ig{margin-top:10px; font-size:32px; font-weight:700; color:rgba(255,255,255,.9)}
+  .call svg{width:30px; height:30px; vertical-align:-5px; margin-right:8px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><filter id="liquid" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.006 0.009" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="42" xChannelSelector="R" yChannelSelector="G"/></filter></svg>
+<div class="poster">
+  <!-- scene -->
+  <div class="velvet l"></div><div class="velvet r"></div>
+  <div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div><div class="orb o4"></div><div class="orb o5"></div><div class="beams"></div>
+  <div class="ring"></div>
+  <img class="masks-bg" src="logo_rond.png" alt="">
+  <div class="grain"></div>
+
+  <!-- glass UI -->
+  <div class="glass pill-top"><span class="dot"></span>Professeur de théâtre<span class="sep">·</span>Oyonnax &amp; alentours</div>
+
+  <div class="glass hero">
+    <div class="glass lens"><div class="disc"><img src="logo_rond.png" alt="Logo L'Art du Je"></div></div>
+    <h1 class="brand">L'Art du <em>Je</em></h1>
+    <p class="slogan">Entre en scène.</p>
+    <p class="tagline">Ici, le jeu commence par <b>Je</b>.</p>
+  </div>
+
+  <p class="section">Cours de théâtre à l'année</p>
+  <div class="glass tile t1"><div class="who">Enfants</div><div class="yrs">7 – 11 ans</div></div>
+  <div class="glass tile t2"><div class="who">Ados</div><div class="yrs">12 – 16 ans</div></div>
+  <div class="glass tile t3"><div class="who">Adultes</div><div class="yrs">dès 17 ans</div></div>
+
+  <div class="chips">
+    <div class="glass chip" style="position:relative">Spectacles</div>
+    <div class="glass chip" style="position:relative">Impro</div>
+    <div class="glass chip" style="position:relative">Scène ouverte</div>
+  </div>
+
+  <div class="glass dock">
+    <div class="place"><div class="cta">Infos &amp; inscriptions</div><b>Salle Mogador</b>Montréal-la-Cluse</div>
+    <div class="call">
+      <div class="tel">06 37 43 88 00</div>
+      <div class="ig"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/></svg>@lart.du.je</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
