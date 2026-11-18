@@ -40,18 +40,18 @@ export function createPhysics(terrain) {
       const sp = Math.hypot(vx, vz);
       const sub = Math.min(1, (depth + 0.05) / 0.5);
       // moving displacement -> V wake
-      waves.disturb(wp.x, wp.z, -sub * Math.min(sp, 14) * 0.11, 0.9);
+      waves.disturb(wp.x, wp.z, -sub * Math.min(sp, 14) * 0.065, 0.9);
       // bow pile-up just ahead of the front points
-      if (i < 2 && sp > 1) waves.disturb(wp.x + vx / sp * 1.1, wp.z + vz / sp * 1.1, sub * Math.min(sp, 14) * 0.06, 0.8);
-      if (sp > 2.5) waves.addFoam(wp.x, wp.z, sub * Math.min(1, sp / 12) * 0.25, 1.0);
+      if (i < 2 && sp > 1) waves.disturb(wp.x + vx / sp * 1.1, wp.z + vz / sp * 1.1, sub * Math.min(sp, 14) * 0.035, 0.8);
+      if (sp > 1.5 && i >= 2) waves.addFoam(wp.x, wp.z, sub * Math.min(1, sp / 8) * 0.2, 0.6);
       // entering water (crossing the surface downward)
       if (!Number.isNaN(py) && py <= 0 && depth > 0) splashV = Math.max(splashV, -car.vel.y, sp * 0.25);
     }
     if (splashV > 1.6) {
       const I = Math.min(1, splashV / 9);
       events.push({ type: 'carSplash', intensity: I, x: car.pos.x, z: car.pos.z });
-      waves.disturb(car.pos.x, car.pos.z, -I * 2.2, 2.2);
-      waves.addFoam(car.pos.x, car.pos.z, I, 2.5);
+      waves.disturb(car.pos.x, car.pos.z, -I * 1.0, 2.0);
+      waves.addFoam(car.pos.x, car.pos.z, I * 0.45, 1.8);
     }
   }
 

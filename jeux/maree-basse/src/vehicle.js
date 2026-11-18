@@ -37,7 +37,7 @@ export const CAR = {
   // Chassis box used for collisions with props/obstacles (local, relative to COM)
   box: { minX: -0.98, maxX: 0.98, minY: -0.42, maxY: 1.22, minZ: -2.12, maxZ: 2.2 },
   // Buoyancy: total lift when the whole sample set is submerged, as fraction of weight.
-  buoyancy: 1.55,
+  buoyancy: 3.0,
   hullDepth: 1.0,
 };
 
@@ -339,7 +339,7 @@ export function createVehicle(terrain, water) {
     if (subm > 0.05) {
       // paddling: wheels act as crude paddles when floating
       const paddle = (grounded < 2 ? 1 : 0.3) * subm;
-      scale(force, F, engineF * 0.32 * paddle);
+      scale(force, F, engineF * 0.6 * paddle);
       addForceAt(force, car.pos);
       // rudder-ish yaw from steering when moving in water
       const yaw = car.steer * speedF * 900 * subm;

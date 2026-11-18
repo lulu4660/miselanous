@@ -421,6 +421,7 @@ async function boot(hot) {
     birds.update(game.time, dt, car.pos);
     if (structures.lamp) structures.lamp.scale.setScalar(1 + Math.sin(game.time * 2.2) * 0.08);
     updateCamera(dt);
+    if (window.__mbCamHook) window.__mbCamHook(camera, car);
     // sun & shadow frustum follow the car
     sun.target.position.set(car.pos.x, car.pos.y, car.pos.z);
     sun.position.copy(sun.target.position).addScaledVector(U.uSunDir.value, 90);

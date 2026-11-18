@@ -84,8 +84,8 @@ export function createWaves(terrain, { n = 128, cell = 0.5 } = {}) {
   W.step = function (dt) {
     W.time += dt;
     const inv = 1 / (cell * cell);
-    const damp = Math.pow(0.35, dt); // per-second velocity damping factor
-    const hdamp = Math.pow(0.6, dt);
+    const damp = Math.pow(0.6, dt); // per-second velocity damping factor
+    const hdamp = Math.pow(0.75, dt);
     for (let j = 1; j < N - 1; j++) {
       const row = j * N;
       for (let i = 1; i < N - 1; i++) {
@@ -106,7 +106,7 @@ export function createWaves(terrain, { n = 128, cell = 0.5 } = {}) {
       h[k] = (h[k] + v[k] * dt) * hdamp * sponge[k];
       if (h[k] > 0.6) h[k] = 0.6; else if (h[k] < -0.6) h[k] = -0.6;
       const agit = Math.abs(v[k]);
-      const f = foam[k] * fdec + (agit > 0.12 ? (agit - 0.12) * dt * 6 : 0);
+      const f = foam[k] * fdec + (agit > 0.45 ? (agit - 0.45) * dt * 1.2 : 0);
       foam[k] = f > 1 ? 1 : f;
     }
   };

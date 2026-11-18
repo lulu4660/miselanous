@@ -319,19 +319,31 @@ export function createShells(layout, terrain) {
   const geo = scallopGeo();
   const mat = new THREE.MeshStandardMaterial({ color: '#ffc94a', emissive: '#ff9d2e', emissiveIntensity: 0.55, metalness: 0.35, roughness: 0.32, side: THREE.DoubleSide });
   const beamMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color('#ffd27a') } },
-    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color('#ffc451') } },
+    vertexShader: `varying vec2 vUv;
+      void main(){
+        vUv = uv;
+        // cylindrical billboard: the quad turns around Y to face the camera
+        vec3 centre = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        vec3 toCam = cameraPosition - centre; toCam.y = 0.0; toCam = normalize(toCam);
+        vec3 right = vec3(toCam.z, 0.0, -toCam.x);
+        vec3 wp = centre + right * position.x + vec3(0.0, position.y, 0.0);
+        gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+      }`,
     fragmentShader: `uniform float uTime; uniform vec3 uColor; varying vec2 vUv;
       void main(){
-        float edge = pow(sin(vUv.x * 3.14159), 2.0);
-        float fade = (1.0 - vUv.y) * smoothstep(0.0, 0.08, vUv.y);
-        float flick = 0.85 + 0.15 * sin(uTime * 3.0 + vUv.y * 12.0);
-        gl_FragColor = vec4(uColor, edge * fade * 0.42 * flick);
+        float x = (vUv.x - 0.5) * 2.0;
+        float core = exp(-x * x * 18.0);
+        float glow = exp(-x * x * 3.5) * 0.45;
+        float fade = pow(1.0 - vUv.y, 1.6) * smoothstep(0.0, 0.03, vUv.y);
+        float flick = 0.88 + 0.12 * sin(uTime * 2.4 - vUv.y * 9.0);
+        vec3 c = mix(uColor, vec3(1.0, 0.97, 0.85), core * 0.6);
+        gl_FragColor = vec4(c, (core * 0.75 + glow) * fade * flick);
         #include <colorspace_fragment>
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
   });
-  const beamGeo = new THREE.CylinderGeometry(0.55, 0.9, 26, 16, 1, true).translate(0, 13, 0);
+  const beamGeo = new THREE.PlaneGeometry(3.2, 30, 1, 1).translate(0, 15, 0);
   const haloMat = new THREE.MeshBasicMaterial({ color: '#ffd98a', transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending });
   const haloGeo = new THREE.RingGeometry(0.6, 1.25, 32).rotateX(-Math.PI / 2);
   const items = layout.shells.map((s) => {
@@ -339,11 +351,13 @@ export function createShells(layout, terrain) {
     const y = Math.max(s.y, 0) + 0.55;
     g.position.set(s.x, y, s.z);
     const shell = new THREE.Mesh(geo, mat);
-    shell.scale.setScalar(1.25);
+    shell.scale.setScalar(1.7);
     shell.castShadow = true;
     g.add(shell);
     const beam = new THREE.Mesh(beamGeo, beamMat);
     beam.position.y = -0.6;
+    beam.frustumCulled = false;
+    beam.renderOrder = 4;
     g.add(beam);
     const halo = new THREE.Mesh(haloGeo, haloMat.clone());
     halo.position.y = Math.max(s.y, 0) - y + 0.06;
@@ -361,7 +375,7 @@ export function createShells(layout, terrain) {
           it.collectT += dt;
           const k = it.collectT / 0.9;
           it.group.position.y = it.baseY + k * 3.5;
-          it.shell.scale.setScalar(1.25 * (1 + k * 0.6) * Math.max(0, 1 - k * k));
+          it.shell.scale.setScalar(1.7 * (1 + k * 0.6) * Math.max(0, 1 - k * k));
           it.shell.rotation.y += dt * 12;
           it.beam.scale.set(1 - k, 1, 1 - k);
           it.halo.material.opacity = 0.35 * (1 - k);

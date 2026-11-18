@@ -69,6 +69,30 @@ else if (scenario.startsWith('touch')) {
   console.log('all ->', JSON.stringify(e));
   await snap('touch_end');
 }
+else if (scenario.startsWith('beam')) {
+  const info = await page.evaluate(() => {
+    const mb = window.__mb, s = mb.layout.shells[3];
+    mb.car.reset(s.x, s.z - 30, 0);
+    return { s, n: mb.layout.shells.length };
+  });
+  console.log('shell', JSON.stringify(info));
+  await wait(2500); await snap('beam_far');
+  await page.evaluate(() => { const mb = window.__mb, s = mb.layout.shells[3]; mb.car.reset(s.x, s.z - 9, 0); });
+  await wait(1500); await snap('beam_near');
+}
+else if (scenario.startsWith('wake')) {
+  // find open lagoon water ~0.6-1.2 m deep near spawn and drive a slalom
+  await page.evaluate(() => {
+    const mb = window.__mb, t = mb.terrain;
+    let best = null;
+    for (let k = 0; k < 4000; k++) { const x = (Math.random() - 0.5) * 200, z = (Math.random() - 0.5) * 200; const h = t.heightAt(x, z); if (h < -0.6 && h > -1.0) { let ok = true; for (let d = 0; d < 30; d += 3) if (t.heightAt(x, z + d) > -0.4) { ok = false; break; } if (ok) { best = { x, z }; break; } } }
+    mb.car.reset(best.x, best.z, 0);
+    window.__mbCamHook = (cam, car) => { cam.position.set(car.pos.x - 6, car.pos.y + 16, car.pos.z - 10); cam.lookAt(car.pos.x, car.pos.y, car.pos.z + 4); };
+  });
+  await drive(1, 0.35); await wait(2500); await snap('wake1');
+  await drive(1, -0.5); await wait(2000); await snap('wake2');
+  await drive(0, 0); await wait(1500); await snap('wake3');
+}
 else if (scenario.startsWith('tour')) {
   // teleport next to a few landmarks, facing them
   const spots = await page.evaluate(() => {

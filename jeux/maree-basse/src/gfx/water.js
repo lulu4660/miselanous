@@ -98,7 +98,7 @@ export function createWater({ heightTex, terrain, waves, fog }) {
       float fade = e.x * e.y;
       suv = suv + 0.5 / uSimN;
       vec4 s = texture2D(uSim, suv);
-      vec2 sg = (s.gb - 0.50196) * (0.6 * 255.0 / 127.0) * fade;
+      vec2 sg = clamp((s.gb - 0.50196) * (0.6 * 255.0 / 127.0), -0.22, 0.22) * fade;
       float sfoam = s.a * fade;
 
       // swell slope (analytic)
@@ -112,7 +112,7 @@ export function createWater({ heightTex, terrain, waves, fog }) {
       vec2 n3 = texture2D(uNoise, xz * 0.31 + t * vec2(-0.02, 0.017)).gr - 0.5;
       vec2 detail = n1 * 0.55 + n2 * 0.45 + n3 * 0.25;
       float calm = mix(0.35, 1.0, smoothstep(0.1, 1.5, d));
-      vec3 N = normalize(vec3(-(sg.x * 1.6 + dx) - detail.x * 0.5 * calm, 1.0, -(sg.y * 1.6 + dz) - detail.y * 0.5 * calm));
+      vec3 N = normalize(vec3(-(sg.x * 2.4 + dx) - detail.x * 0.5 * calm, 1.0, -(sg.y * 2.4 + dz) - detail.y * 0.5 * calm));
 
       vec3 V = normalize(cameraPosition - vWorld);
       float ndv = max(dot(N, V), 0.0);
@@ -126,7 +126,8 @@ export function createWater({ heightTex, terrain, waves, fog }) {
       float ndl = max(dot(N, uSunDir), 0.0);
       col *= (0.62 + 0.45 * ndl) * mix(0.8, 1.0, cloud);
       // light scattering through wave crests
-      col += cLagoon * 0.25 * smoothstep(0.0, 0.12, vSimH) * fade;
+      col += vec3(0.55, 0.95, 0.9) * 0.1 * smoothstep(0.0, 0.1, vSimH) * fade;
+      col *= 1.0 - 0.12 * smoothstep(0.0, 0.1, -vSimH) * fade;
 
       // sky reflection
       vec3 R = reflect(-V, N);
@@ -160,7 +161,10 @@ export function createWater({ heightTex, terrain, waves, fog }) {
       float foam = max(shore, bands);
       foam = max(foam, lace * max(shallowMask * 0.85, capMask * 0.7));
       foam = max(foam, max(lace, lace2 * 0.9) * wakeMask);
-      foam = max(foam, smoothstep(0.55, 0.95, sfoam) * 0.9);
+      foam = max(foam, smoothstep(0.82, 1.0, sfoam) * 0.6);
+      // wave crests catch light and break into lace
+      float crest = smoothstep(0.06, 0.16, vSimH) * fade;
+      foam = max(foam, lace * crest * 0.55);
       foam = clamp(foam, 0.0, 1.0);
       col = mix(col, cFoam * (0.78 + 0.32 * ndl) * mix(0.85, 1.0, cloud), foam * 0.92);
 
