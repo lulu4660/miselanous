@@ -12,6 +12,7 @@ import { createVegetation } from './gfx/vegetation.js';
 import { createPropMeshes, createStructures, createShells } from './gfx/objects.js';
 import { createParticles, createTracks } from './gfx/fx.js';
 import { createBirds } from './gfx/birds.js';
+import { createFish } from './gfx/fish.js';
 import { createInput } from './input.js';
 import { createAudio } from './audio.js';
 
@@ -113,6 +114,8 @@ async function boot(hot) {
   scene.add(tracks.group);
   const birds = createBirds(7);
   scene.add(birds.group);
+  const fish = createFish(terrain, waves, water, particles, 3);
+  scene.add(fish.group);
   await progress(0.82, 'Le moteur chauffe…');
 
   // ---------- State
@@ -419,6 +422,7 @@ async function boot(hot) {
     particles.update(dt);
     tracks.update(phys.time, scene.fog);
     birds.update(game.time, dt, car.pos);
+    fish.update(dt, car.pos);
     if (structures.lamp) structures.lamp.scale.setScalar(1 + Math.sin(game.time * 2.2) * 0.08);
     updateCamera(dt);
     if (window.__mbCamHook) window.__mbCamHook(camera, car);

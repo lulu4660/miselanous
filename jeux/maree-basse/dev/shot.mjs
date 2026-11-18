@@ -80,6 +80,19 @@ else if (scenario.startsWith('beam')) {
   await page.evaluate(() => { const mb = window.__mb, s = mb.layout.shells[3]; mb.car.reset(s.x, s.z - 9, 0); });
   await wait(1500); await snap('beam_near');
 }
+else if (scenario.startsWith('jump')) {
+  await page.evaluate(() => {
+    const mb = window.__mb, r = mb.layout.ramps[0];
+    mb.car.reset(r.x - Math.sin(r.angle) * 22, r.z - Math.cos(r.angle) * 22, r.angle);
+    window.__mbCamHook = (cam, car) => {
+      const sx = Math.cos(r.angle), sz = -Math.sin(r.angle);
+      cam.position.set(car.pos.x + sx * 9, car.pos.y + 2.2, car.pos.z + sz * 9);
+      cam.lookAt(car.pos.x, car.pos.y + 0.3, car.pos.z);
+    };
+  });
+  await drive(1, 0);
+  for (let k = 0; k < 6; k++) { await wait(k === 0 ? 2200 : 330); await snap('jump' + k); }
+}
 else if (scenario.startsWith('wake')) {
   // find open lagoon water ~0.6-1.2 m deep near spawn and drive a slalom
   await page.evaluate(() => {

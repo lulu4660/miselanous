@@ -48,7 +48,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 #play { pointer-events: auto; margin-top: 0; border: 0; cursor: pointer; padding: 16px 30px 17px; border-radius: 999px; background: var(--cream); color: var(--ink);
   font-weight: 800; font-size: 18px; letter-spacing: .01em; box-shadow: 0 6px 0 #d8b98f, 0 14px 30px rgba(43,34,51,.3); transition: transform .12s ease, box-shadow .12s ease; }
 #play:active { transform: translateY(4px); box-shadow: 0 2px 0 #d8b98f, 0 8px 18px rgba(43,34,51,.3); }
-#title .how { margin-top: 18px; font-size: 13px; color: var(--cream-dim); max-width: 36ch; line-height: 1.45; }
+#title .how { margin-top: 18px; font-size: 13px; color: var(--cream); opacity: .9; max-width: 36ch; line-height: 1.45; text-shadow: 0 1px 2px rgba(43,34,51,.6), 0 1px 10px rgba(43,34,51,.55); }
 #title .how b { color: var(--cream); font-weight: 700; }
 
 /* ---------- HUD ---------- */
@@ -82,7 +82,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .round { width: 78px; height: 78px; border-radius: 50%; border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   display: grid; place-items: center; touch-action: none; cursor: pointer; padding: 0; transition: transform .08s ease, background .08s ease; }
 .round svg { width: 34px; height: 34px; }
-.round small { display: block; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-top: -2px; color: var(--cream-dim); }
+.round small { display: block; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-top: -2px; color: var(--cream-dim); }
 .round .in { display: grid; justify-items: center; gap: 2px; }
 .round.down { transform: scale(.92); background: var(--glass-strong); }
 #horn { width: 64px; height: 64px; }
