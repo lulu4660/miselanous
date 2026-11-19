@@ -275,7 +275,7 @@ export function createAudio() {
           unlocked = true;
           hookVisibility();
         }
-        if (ctx.state === 'suspended' && !(typeof document !== 'undefined' && document.hidden)) {
+        if (ctx.state !== 'running' && ctx.state !== 'closed' && !(typeof document !== 'undefined' && document.hidden)) {
           const p = ctx.resume();
           if (p && p.catch) p.catch(() => {});
         }

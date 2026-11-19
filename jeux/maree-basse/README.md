@@ -3,7 +3,7 @@
 Petit jeu de conduite mobile en 3D : un 4×4 amphibie explore un archipel de lagons à l'heure dorée et cherche douze coquillages dorés.
 
 - **Jouer** : ouvrir `dist/play.html` dans un navigateur récent (Safari iOS, Chrome Android ou desktop). Three.js est chargé depuis jsDelivr.
-- **Tactile** : pouce gauche pour conduire dans la direction voulue (relative à la caméra) ; boutons à droite pour le dérapage (frein à main) et le klaxon.
+- **Tactile** : un seul pouce. Pose-le n'importe où pour avancer, glisse-le à gauche ou à droite pour tourner, lâche-le pour freiner. Le bouton « Recul » (à garder appuyé) fait reculer, « Pouet » klaxonne. Touche la vitesse (km/h) pour afficher images/s et résolution.
 - **Clavier** : flèches, ZQSD ou WASD ; Espace = frein à main ; K = klaxon.
 
 ## Ce qui tourne sous le capot

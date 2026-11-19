@@ -104,7 +104,8 @@ export function createWaves(terrain, { n = 128, cell = 0.5 } = {}) {
     const fdec = Math.pow(0.42, dt);
     for (let k = 0; k < N * N; k++) {
       h[k] = (h[k] + v[k] * dt) * hdamp * sponge[k];
-      if (h[k] > 0.6) h[k] = 0.6; else if (h[k] < -0.6) h[k] = -0.6;
+      const lo = -c2[k] * 0.055; // about 55% of the local depth (c2 = g*d)
+      if (h[k] > 0.6) h[k] = 0.6; else if (h[k] < lo) { h[k] = lo; if (v[k] < 0) v[k] *= 0.5; }
       const agit = Math.abs(v[k]);
       const f = foam[k] * fdec + (agit > 0.45 ? (agit - 0.45) * dt * 1.2 : 0);
       foam[k] = f > 1 ? 1 : f;

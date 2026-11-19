@@ -164,7 +164,8 @@ export function createTerrain(seed = 7) {
   const tmpN = [0, 1, 0];
   // ground(): height, normal and surface of the drivable ground (terrain + structures).
   // out = { h, nx, ny, nz, surf }
-  terrain.ground = function (x, z, out, yHint = Infinity) {
+  // tol: how far below a structure's top a probe may be and still stand on it.
+  terrain.ground = function (x, z, out, yHint = Infinity, tol = 0.12) {
     let h = terrain.normalAt(x, z, tmpN);
     out.nx = tmpN[0]; out.ny = tmpN[1]; out.nz = tmpN[2];
     out.surf = surfaceFor(h, tmpN[1], terrain.mesaAt(x, z), terrain.grassAt(x, z));
@@ -187,7 +188,7 @@ export function createTerrain(seed = 7) {
       }
       // Only count it if we are above (or near) the top: lets cars drive under nothing,
       // but also lets wheels that are below a deck still use the terrain.
-      if (top > h && yHint > top - 0.6) {
+      if (top > h && yHint > top - tol) {
         h = top;
         // rotate local normal back to world
         out.nx = nlx * s.cos + nlz * s.sin;
@@ -198,6 +199,34 @@ export function createTerrain(seed = 7) {
     }
     out.h = h;
     return out;
+  };
+
+  // Side walls of structures (pier deck slab, solid ramps). Returns penetration depth and
+  // writes the outward horizontal normal into out.nx/out.nz, or returns 0.
+  terrain.structureWall = function (x, y, z, out) {
+    const S = terrain.structures;
+    let best = 0;
+    for (let q = 0; q < S.length; q++) {
+      const s = S[q];
+      const dx = x - s.x, dz = z - s.z;
+      const lx = dx * s.cos - dz * s.sin;
+      const lz = dx * s.sin + dz * s.cos;
+      if (Math.abs(lx) > s.hw || Math.abs(lz) > s.hl) continue;
+      const top = s.type === 'ramp' ? s.y0 + (s.y1 - s.y0) * ((lz + s.hl) / (2 * s.hl)) : s.y1;
+      const bottom = s.type === 'ramp' ? -Infinity : s.y1 - 0.5;
+      if (y > top - 0.25 || y < bottom) continue;
+      // nearest open edge (a ramp's low end is a slope, not a wall)
+      let d = s.hw - lx, nlx = 1, nlz = 0;
+      if (s.hw + lx < d) { d = s.hw + lx; nlx = -1; nlz = 0; }
+      if (s.hl - lz < d) { d = s.hl - lz; nlx = 0; nlz = 1; }
+      if (s.type !== 'ramp' && s.hl + lz < d) { d = s.hl + lz; nlx = 0; nlz = -1; }
+      if (d > best) {
+        best = d;
+        out.nx = nlx * s.cos + nlz * s.sin;
+        out.nz = -nlx * s.sin + nlz * s.cos;
+      }
+    }
+    return best;
   };
 
   terrain.waterDepthAt = function (x, z) {

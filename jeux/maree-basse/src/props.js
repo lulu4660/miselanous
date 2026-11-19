@@ -124,7 +124,7 @@ export function createProps(terrain, water, waves) {
       integrateQuat(p.q, p.w, dt);
 
       // terrain contact
-      const gh = terrain.ground(pos.x, pos.z, g, pos.y).h;
+      const gh = terrain.ground(pos.x, pos.z, g, pos.y - p.r + 0.05, 0.12).h;
       const dist = (pos.y - gh) * g.ny;
       if (dist < p.r) {
         set(n, g.nx, g.ny, g.nz);

@@ -105,6 +105,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 #edge { position: fixed; left: 0; top: 0; width: 40px; height: 40px; margin: -20px 0 0 -20px; z-index: 18; pointer-events: none; opacity: 0; transition: opacity .25s ease; }
 #edge.on { opacity: 1; }
 #edge svg { width: 40px; height: 40px; filter: drop-shadow(0 2px 4px rgba(43,34,51,.5)); }
+body:not(.playing) .pad, #hud:not(.on) .tr, #hud:not(.on) #speed { display: none; }
 body.ended .pad, body.ended #speed, body.ended #compass, body.ended #edge, body.ended #zone { display: none; }
 #fade { background: #fff4e2; opacity: 0; transition: opacity .35s ease; z-index: 40; }
 #fade.on { opacity: 1; }

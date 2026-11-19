@@ -170,6 +170,9 @@ async function boot(hot) {
     audio.unlock();
     audio.uiTap();
     game.mode = 'play';
+    input.enabled = true;
+    document.body.classList.add('playing');
+    document.activeElement?.blur?.();
     $('title').classList.add('gone');
     $('hud').classList.add('on');
     if (touchUI) {
@@ -181,6 +184,9 @@ async function boot(hot) {
   };
   $('play').addEventListener('click', start);
   window.addEventListener('keydown', (e) => { if (game.mode === 'title' && (e.code === 'Enter' || e.code === 'Space')) { e.preventDefault(); start(); } });
+  // any touch re-unlocks audio inside a gesture (iOS suspends it after interruptions)
+  window.addEventListener('pointerdown', () => { if (game.mode === 'play') audio.unlock(); }, { passive: true });
+  for (const id of ['btnSound', 'btnReset', 'endBtn', 'play']) $(id).addEventListener('click', (e) => e.currentTarget.blur());
   $('btnSound').addEventListener('click', () => {
     audio.unlock();
     audio.setMuted(!audio.isMuted());
@@ -222,8 +228,14 @@ async function boot(hot) {
     const follow = car.forwardSpeed > -1.5 ? 2.0 : 0.3;
     const k = 1 - Math.exp(-dt * follow * Math.min(1, 0.25 + sp / 6));
     cam.yaw += wrapAngle(carYaw - cam.yaw) * (cam.snap ? 1 : k);
-    const look = (portrait ? 7.5 : 1.0) + Math.min(sp, 20) * (portrait ? 0.32 : 0.18);
-    tmpV.set(car.pos.x + fx * look, Math.max(car.pos.y, -0.4) + 0.3, car.pos.z + fz * look);
+    // look ahead along the camera heading plus where the car is actually going (stays
+    // centred when the car spins or slides), capped so it never leaves the frame
+    const base = portrait ? 6.5 : 1.0;
+    let lx = Math.sin(cam.yaw) * base + car.vel.x * (portrait ? 0.32 : 0.18);
+    let lz = Math.cos(cam.yaw) * base + car.vel.z * (portrait ? 0.32 : 0.18);
+    const ll = Math.hypot(lx, lz), cap = portrait ? 12 : 5;
+    if (ll > cap) { lx *= cap / ll; lz *= cap / ll; }
+    tmpV.set(car.pos.x + lx, Math.max(car.pos.y, -0.4) + 0.3, car.pos.z + lz);
     if (cam.snap) cam.target.copy(tmpV); else cam.target.lerp(tmpV, 1 - Math.exp(-dt * 4));
     const zoom = 1 + Math.min(sp, 20) * 0.012;
     const dist = (portrait ? 21 : 14) * zoom;

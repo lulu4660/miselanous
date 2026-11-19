@@ -128,7 +128,7 @@ export function createVehicle(terrain, water) {
 
   // Raycast along -U from anchor A; returns distance to ground or -1.
   function castWheel(Ax, Ay, Az, Dx, Dy, Dz, maxT) {
-    const f = (t) => (Ay + Dy * t) - terrain.ground(Ax + Dx * t, Az + Dz * t, g, Ay + Dy * t + 0.3).h;
+    const f = (t) => (Ay + Dy * t) - terrain.ground(Ax + Dx * t, Az + Dz * t, g, Ay + Dy * t).h;
     let f0 = f(0);
     if (f0 <= 0) return 0;
     const steps = 5;
@@ -229,7 +229,7 @@ export function createVehicle(terrain, water) {
       w.suspLen = CAR.restLength - w.compression;
       // contact point & ground normal
       set(P, A.x + D.x * t, A.y + D.y * t, A.z + D.z * t);
-      terrain.ground(P.x, P.z, g, P.y + 0.3);
+      terrain.ground(P.x, P.z, g, P.y + 0.05);
       set(n, g.nx, g.ny, g.nz);
       copy(w.contact, P); copy(w.normal, n);
       w.surf = g.surf;
@@ -358,12 +358,15 @@ export function createVehicle(terrain, water) {
     const upDot = U.y;
     if (upDot < 0.35 && hspeed < 3) car.flippedTime += dt; else car.flippedTime = Math.max(0, car.flippedTime - dt * 2);
     if (car.flippedTime > 1.2) {
-      // torque that rotates U toward world up
+      // torque that rotates U toward world up; when fully inverted the cross product
+      // vanishes, so roll around the forward axis instead
       cross(tmp, U, set(tmp2, 0, 1, 0));
+      if (Math.hypot(tmp.x, tmp.y, tmp.z) < 0.3) { copy(tmp, F); }
+      normalize(tmp);
       const s = Math.min(1, (car.flippedTime - 1.2) * 1.5);
-      addScaled(torqueAcc, tmp, 9000 * s);
+      addScaled(torqueAcc, tmp, 11000 * s);
       addScaled(torqueAcc, car.angVel, -1500 * s);
-      if (upDot < 0.1) forceAcc.y += CAR.mass * G * 0.6 * s;
+      if (upDot < 0.3) forceAcc.y += CAR.mass * G * 0.85 * s;
     }
 
     // --- Integrate velocities
@@ -413,39 +416,40 @@ export function createVehicle(terrain, water) {
   };
 
   const hp = v3(), hn = v3(), hv = v3(), ht = v3(), timp = v3();
+  const wall = { nx: 0, nz: 0 };
+  function contact(dt, depth, rest = 0.25) {
+    car.velocityAt(hv, hp);
+    const vn = dot(hv, hn);
+    const k = car.invMassAt(hp, hn);
+    const bias = Math.min(4, Math.max(0, depth - 0.01) * 0.25 / dt);
+    let jn = (-(vn) * (vn < -2 ? 1 + rest : 1) + bias) / k;
+    if (jn <= 0) return;
+    if (vn < -3) car.events.push({ type: 'scrape', intensity: Math.min(1, -vn / 8) });
+    scale(timp, hn, jn);
+    car.applyImpulseAt(timp, hp);
+    car.velocityAt(hv, hp);
+    const vnn = dot(hv, hn);
+    set(ht, hv.x - hn.x * vnn, hv.y - hn.y * vnn, hv.z - hn.z * vnn);
+    const vt = Math.hypot(ht.x, ht.y, ht.z);
+    if (vt > 1e-4) {
+      scale(ht, ht, 1 / vt);
+      const kt = car.invMassAt(hp, ht);
+      const jt = Math.min(vt / kt, 0.55 * jn);
+      scale(timp, ht, -jt);
+      car.applyImpulseAt(timp, hp);
+    }
+  }
   function resolveHullContacts(dt) {
     const R = car.R;
     for (let i = 0; i < HULL.length; i++) {
       mulMat(hp, R, HULL[i]); add(hp, hp, car.pos);
-      terrain.ground(hp.x, hp.z, g, hp.y + 0.5);
+      // ground (structures only count if the point is at most 0.25 m below their top)
+      terrain.ground(hp.x, hp.z, g, hp.y, 0.25);
       const pen = g.h - hp.y;
-      if (pen <= 0) continue;
-      set(hn, g.nx, g.ny, g.nz);
-      const depth = pen * hn.y;
-      car.velocityAt(hv, hp);
-      const vn = dot(hv, hn);
-      const k = car.invMassAt(hp, hn);
-      // normal impulse with Baumgarte bias
-      const bias = Math.max(0, depth - 0.01) * 0.25 / dt;
-      let jn = (-(vn) * (vn < -2 ? 1.25 : 1) + bias) / k;
-      if (jn < 0) jn = 0;
-      if (jn > 0) {
-        if (vn < -3) car.events.push({ type: 'scrape', intensity: Math.min(1, -vn / 8) });
-        scale(timp, hn, jn);
-        car.applyImpulseAt(timp, hp);
-        // friction
-        car.velocityAt(hv, hp);
-        const vnn = dot(hv, hn);
-        set(ht, hv.x - hn.x * vnn, hv.y - hn.y * vnn, hv.z - hn.z * vnn);
-        const vt = Math.hypot(ht.x, ht.y, ht.z);
-        if (vt > 1e-4) {
-          scale(ht, ht, 1 / vt);
-          const kt = car.invMassAt(hp, ht);
-          const jt = Math.min(vt / kt, 0.55 * jn);
-          scale(timp, ht, -jt);
-          car.applyImpulseAt(timp, hp);
-        }
-      }
+      if (pen > 0) { set(hn, g.nx, g.ny, g.nz); contact(dt, pen * hn.y); }
+      // pier / ramp sides act as walls: push out horizontally, never launch upward
+      const wd = terrain.structureWall(hp.x, hp.y, hp.z, wall);
+      if (wd > 0) { set(hn, wall.nx, 0, wall.nz); contact(dt, Math.min(wd, 0.5), 0.05); }
     }
   }
 

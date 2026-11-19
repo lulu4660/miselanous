@@ -42,11 +42,11 @@ else if (scenario.startsWith('touch')) {
   await page.mouse.move(sx, sy - 70, { steps: 5 });
   await wait(2500);
   const a = await page.evaluate(() => ({ v: window.__mb.car.forwardSpeed, thr: window.__mb.car.input.throttle, steer: window.__mb.car.input.steer }));
-  console.log('joystick up ->', JSON.stringify(a));
+  console.log('thumb held ->', JSON.stringify(a));
   await page.mouse.move(sx + 70, sy - 20, { steps: 5 });
   await wait(1200);
   const b = await page.evaluate(() => ({ v: window.__mb.car.forwardSpeed, thr: window.__mb.car.input.throttle, steer: window.__mb.car.input.steer }));
-  console.log('joystick right ->', JSON.stringify(b));
+  console.log('thumb slid right ->', JSON.stringify(b));
   await snap('touch_drive');
   await page.mouse.up();
   await wait(300);
@@ -142,6 +142,24 @@ else if (scenario.startsWith('controls')) {
   const e1 = await st(); console.log('lift', JSON.stringify(e0), '->', JSON.stringify(e1));
   ok(Math.abs(e1.v) < 1.0, 'lifting the thumb stops the car within 3 s (from ' + e0.v + ' m/s)');
   await snap('ctl_after');
+}
+else if (scenario.startsWith('wadecam')) {
+  // gameplay camera (no hook): drive through 0.3-0.6 m water at ~10 m/s
+  const simWait = async (sec) => { const t0 = await page.evaluate(() => window.__mb.phys.time); await page.waitForFunction((t) => window.__mb.phys.time >= t, t0 + sec, { timeout: 120000, polling: 50 }); };
+  await page.evaluate(() => {
+    const mb = window.__mb, t = mb.terrain;
+    let sd = 777; const R = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    for (let k = 0; k < 40000; k++) {
+      const x = (R() - 0.5) * 220, z = (R() - 0.5) * 220, a = R() * 6.28;
+      let ok = true;
+      for (let d = -4; d <= 40; d += 2) { const h = t.heightAt(x + Math.sin(a) * d, z + Math.cos(a) * d); if (h > -0.3 || h < -0.6) { ok = false; break; } }
+      if (ok) { mb.car.reset(x, z, a); return; }
+    }
+  });
+  await drive(0.75, 0); await simWait(2.5); await snap('wadecam1');
+  await drive(0.75, 0.25); await simWait(1.2); await snap('wadecam2');
+  const st = await page.evaluate(() => ({ v: window.__mb.car.speed, wade: window.__mb.car.wade }));
+  console.log('wade', JSON.stringify(st));
 }
 else if (scenario.startsWith('perf')) {
   // fixed-quality perf proxy: frame ms under SwiftShader, JS ms per frame, tris & calls

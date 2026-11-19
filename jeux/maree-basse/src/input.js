@@ -8,6 +8,7 @@ export function createInput({ zone, steerUI, knob, buttons }) {
     keys: new Set(),
     reverse: false, horn: false,
     onFirstUse: null,
+    enabled: false, // set by the game once play starts
   };
   const RANGE = 64; // px of horizontal travel for full lock
   const first = () => { if (state.onFirstUse) { const f = state.onFirstUse; state.onFirstUse = null; f(); } };
@@ -17,7 +18,7 @@ export function createInput({ zone, steerUI, knob, buttons }) {
 
   zone.addEventListener('pointerdown', (e) => {
     const d = state.drag;
-    if (d.active) return;
+    if (d.active || !state.enabled) return;
     e.preventDefault();
     first();
     try { zone.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
@@ -77,7 +78,6 @@ export function createInput({ zone, steerUI, knob, buttons }) {
   window.addEventListener('keydown', (e) => {
     const k = KEYMAP[e.code];
     if (!k) return;
-    if (e.target && /INPUT|TEXTAREA|BUTTON/.test(e.target.tagName) && e.code === 'Space') return;
     e.preventDefault();
     state.keys.add(k);
     first();
@@ -97,7 +97,7 @@ export function createInput({ zone, steerUI, knob, buttons }) {
     const K = state.keys;
     const d = state.drag;
     const horn = state.horn || K.has('horn');
-    if (K.size && !K.has('horn')) {
+    if (K.has('up') || K.has('down') || K.has('left') || K.has('right') || K.has('hb')) {
       const kx = (K.has('right') ? 1 : 0) - (K.has('left') ? 1 : 0);
       const ky = (K.has('up') ? 1 : 0) - (K.has('down') ? 1 : 0);
       return { steer: -kx, throttle: ky, brake: ky === 0 ? 0.6 : 0, handbrake: K.has('hb'), horn, touching: false };

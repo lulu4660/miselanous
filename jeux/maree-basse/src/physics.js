@@ -72,7 +72,7 @@ export function createPhysics(terrain) {
   phys.update = function (frameDt) {
     acc += Math.min(frameDt, 0.1);
     let n = 0;
-    while (acc >= STEP && n < 10) {
+    while (acc >= STEP && n < 12) {
       acc -= STEP; n++; tick++;
       phys.time += STEP;
       car.time = phys.time;
@@ -111,6 +111,7 @@ export function createPhysics(terrain) {
         waves.step(STEP * 2);
       }
     }
+    if (acc > STEP * 2) acc = 0; // never build a backlog on slow devices
     return n;
   };
 

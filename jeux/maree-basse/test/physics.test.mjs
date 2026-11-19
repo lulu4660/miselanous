@@ -170,3 +170,53 @@ test('releasing the controls brakes to a stop (lift-off brake)', () => {
   console.log(`  ${v0.toFixed(1)} m/s -> ${phys.car.forwardSpeed.toFixed(2)} m/s after 3.2 s`);
   assert.ok(Math.abs(phys.car.forwardSpeed) < 1);
 });
+
+import { createLayout } from '../src/layout.js';
+
+test('driving into the pier side or a ramp tall end never launches the car', () => {
+  const t = createTerrain(SEED);
+  const L = createLayout(t);
+  const cases = [];
+  const deck = L.pier.deck;
+  // from the water, perpendicular to the deck, at several points along it
+  for (const along of [-6, 0, 6]) for (const side of [-1, 1]) {
+    const lx = side * (deck.hw + 6), lz = along;
+    const x = deck.x + lx * deck.cos + lz * deck.sin, z = deck.z - lx * deck.sin + lz * deck.cos;
+    const heading = Math.atan2(deck.x + lz * deck.sin - x, deck.z + lz * deck.cos - z);
+    cases.push({ name: `pier side ${side} @${along}`, x, z, heading });
+  }
+  for (const r of L.ramps) {
+    // from beyond the tall end, driving back into it
+    const x = r.x + Math.sin(r.angle) * (r.hl + 7), z = r.z + Math.cos(r.angle) * (r.hl + 7);
+    cases.push({ name: 'ramp tall end', x, z, heading: r.angle + Math.PI });
+    const sx = r.x + Math.cos(r.angle) * (r.hw + 6), sz = r.z - Math.sin(r.angle) * (r.hw + 6);
+    cases.push({ name: 'ramp side', x: sx, z: sz, heading: Math.atan2(r.x - sx, r.z - sz) });
+  }
+  for (const c of cases) {
+    const phys = createPhysics(t);
+    phys.car.reset(c.x, c.z, c.heading);
+    run(phys, 1.2);
+    phys.car.input.throttle = 0.8;
+    let maxVy = 0, maxRise = 0;
+    const y0 = phys.car.pos.y;
+    run(phys, 5, () => { maxVy = Math.max(maxVy, phys.car.vel.y); maxRise = Math.max(maxRise, phys.car.pos.y - y0); });
+    assert.ok(maxVy < 4.5, `${c.name}: vertical speed ${maxVy.toFixed(1)} m/s`);
+    assert.ok(maxRise < 2.4, `${c.name}: rose ${maxRise.toFixed(1)} m`);
+  }
+  console.log(`  ${cases.length} approaches, no launch`);
+});
+
+test('an upside-down car rights itself within a few seconds (flat ground and shallow water)', () => {
+  for (const h of [0.5, -0.5]) {
+    const t = flatTerrain(h);
+    const phys = createPhysics(t);
+    phys.car.reset(0, 0, 0);
+    // roll it onto its roof
+    const q = phys.car.q; q.x = 0; q.y = 0; q.z = 1; q.w = 0;
+    phys.car.pos.y = Math.max(h, 0) + 1.6;
+    let upright = -1;
+    for (let k = 0; k < 7 / STEP; k++) { phys.update(STEP); if (upright < 0 && phys.car.R[4] > 0.9 && k * STEP > 1) upright = k * STEP; }
+    console.log(`  ground ${h}: upright after ${upright.toFixed(1)} s`);
+    assert.ok(upright > 0 && upright < 6.5);
+  }
+});
