@@ -158,7 +158,7 @@ test('after a full-lock turn, centred steering settles into a straight line', ()
   assert.ok(Math.abs(yawRate) < 0.05 && Math.abs(yaw1 - yaw0) < 0.04);
 });
 
-test('releasing the controls brakes to a stop (lift-off brake)', () => {
+test('full brake input stops the car from top speed', () => {
   const t = flatTerrain(0.5);
   const phys = createPhysics(t);
   phys.car.reset(0, -100, 0);

@@ -16,7 +16,7 @@ page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
 const threeSrc = readFileSync(resolve('node_modules/three/build/three.module.min.js'));
 await page.route(/cdn\.jsdelivr\.net\/npm\/three@/, (r) => r.fulfill({ body: threeSrc, contentType: 'application/javascript' }));
 const page_ = process.env.PAGE || 'dist/play.html';
-const url = 'file://' + resolve(page_) + '?q=medium&shot' + (scenario === 'title' ? '' : '&autoplay');
+const url = 'file://' + resolve(page_) + '?q=' + (process.env.Q || 'medium') + '&shot' + (scenario === 'title' ? '' : '&autoplay');
 const t0 = Date.now();
 await page.goto(url);
 await page.waitForFunction(() => window.__mbBooted || document.getElementById('err')?.classList.contains('on'), null, { timeout: 120000 });
@@ -87,9 +87,7 @@ else if (scenario.startsWith('controls')) {
   const T = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
   const st = () => page.evaluate(() => { const c = window.__mb.car; return { v: +c.forwardSpeed.toFixed(2), yaw: +Math.atan2(c.R[2], c.R[8]).toFixed(3), steer: +c.input.steer.toFixed(2), thr: c.input.throttle, brake: c.input.brake }; });
   const ok = (cond, msg) => console.log((cond ? 'PASS ' : 'FAIL ') + msg);
-  // headless SwiftShader renders slower than real time, so wait in *simulation* seconds
   const simWait = async (sec) => { const t0 = await page.evaluate(() => window.__mb.phys.time); await page.waitForFunction((t) => window.__mb.phys.time >= t, t0 + sec, { timeout: 120000, polling: 50 }); };
-  // put the car on a long, dry, flat stretch facing along it
   const spot = await page.evaluate(() => {
     const mb = window.__mb, t = mb.terrain;
     let sd = 12345; const R = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
@@ -99,48 +97,50 @@ else if (scenario.startsWith('controls')) {
       for (let d = -5; d <= 60; d += 2) { const h = t.heightAt(x + Math.sin(a) * d, z + Math.cos(a) * d); if (h < 0.5 || h > 2.2 || t.mesaAt(x + Math.sin(a) * d, z + Math.cos(a) * d) > 0.05) { ok = false; break; } }
       if (ok) return { x, z, a };
     }
-    return { x: mb.layout.spawn.x, z: mb.layout.spawn.z, a: mb.layout.spawn.heading };
   });
-  console.log('test strip', JSON.stringify(spot));
   const resetSpot = () => page.evaluate((s) => { const mb = window.__mb; mb.car.reset(s.x, s.z, s.a); for (const o of mb.phys.obstacles) if (Math.hypot(o.x - s.x, o.z - s.z) < 70) o.y1 = -99; }, spot);
-  await resetSpot();
-  await simWait(1.2);
-  const X = 200, Y = 640;
-  await T('touchStart', [{ x: X, y: Y, id: 1 }]);
+  const ctr = async (sel) => { const r = await page.locator(sel).boundingBox(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, r }; };
+  const gas = await ctr('#gasP'), brk = await ctr('#brakeP'), wh = await ctr('#wheel');
+  await resetSpot(); await simWait(1.5);
+  const s0 = await st(); await simWait(2); const s1 = await st();
+  ok(Math.abs(s1.v) < 0.3 && s1.thr === 0, `no finger: the car stays put (${s1.v} m/s)`);
+  await T('touchStart', [{ x: gas.x, y: gas.y, id: 1 }]);
   await simWait(2.2);
-  let a = await st(); console.log('hold straight', JSON.stringify(a));
-  ok(a.v > 5 && Math.abs(a.steer) < 0.05, 'thumb down drives forward straight');
+  const a = await st(); console.log('gas', JSON.stringify(a));
+  ok(a.v > 6 && a.steer === 0, 'gas pedal drives forward straight');
   await snap('ctl_drive');
-  for (let k = 1; k <= 6; k++) { await T('touchMove', [{ x: X + k * 12, y: Y, id: 1 }]); }
+  // steer: touch the right arrow end of the wheel while gas stays down
+  await T('touchStart', [{ x: gas.x, y: gas.y, id: 1 }, { x: wh.r.x + wh.r.width - 14, y: wh.y, id: 2 }]);
   await simWait(1.0);
-  const b = await st(); console.log('slide right', JSON.stringify(b));
-  ok(b.steer < -0.5 && Math.atan2(Math.sin(b.yaw - a.yaw), Math.cos(b.yaw - a.yaw)) < -0.2, 'slide right turns right');
-  await T('touchMove', [{ x: X, y: Y, id: 1 }]); await simWait(1.6);
-  const c1 = await st(); await simWait(0.8); const c2 = await st();
-  console.log('back to centre', JSON.stringify(c1), JSON.stringify(c2));
-  ok(c1.steer === 0 && c2.steer === 0 && c2.thr === 1, 'thumb back on its landing point gives exactly zero steering (straight-line hold is asserted in the Node physics test)');
-  // reverse while the thumb stays down (multi-touch)
-  const rb = await page.locator('#rev').boundingBox();
-  await T('touchEnd', []); await resetSpot(); await simWait(0.6);
-  await T('touchStart', [{ x: X, y: Y, id: 1 }]); await simWait(1.5);
-  await T('touchStart', [{ x: X, y: Y, id: 1 }, { x: rb.x + rb.width / 2, y: rb.y + rb.height / 2, id: 2 }]);
-  await simWait(3.2);
-  const d = await st(); console.log('reverse held', JSON.stringify(d));
-  const dragAlive = await page.evaluate(() => document.getElementById('steer').classList.contains('on'));
-  ok(d.v < -0.5, 'reverse button brakes then reverses');
-  ok(dragAlive, 'steering thumb survives the second finger');
-  await T('touchEnd', [{ x: X, y: Y, id: 1 }]);
-  await simWait(0.2);
+  const b = await st(); console.log('gas+right arrow', JSON.stringify(b));
+  ok(b.steer < -0.9 && Math.atan2(Math.sin(b.yaw - a.yaw), Math.cos(b.yaw - a.yaw)) < -0.2, 'tapping ▶ while on the gas turns right at full lock');
+  // slide steering to a half-left position
+  await T('touchMove', [{ x: gas.x, y: gas.y, id: 1 }, { x: wh.x - wh.r.width * 0.2, y: wh.y, id: 2 }]);
+  await simWait(0.4);
+  const c = await st(); console.log('slide half left', JSON.stringify(c));
+  ok(c.steer > 0.2 && c.steer < 0.8, 'sliding on the wheel gives analog steering');
+  await T('touchMove', [{ x: gas.x, y: gas.y, id: 1 }, { x: wh.x, y: wh.y, id: 2 }]);
+  await simWait(0.3);
+  const c2 = await st();
+  ok(c2.steer === 0, 'wheel centre gives exactly zero steering');
+  // roll the gas thumb onto the brake (same finger) while still steering
+  await T('touchMove', [{ x: brk.x, y: brk.y, id: 1 }, { x: wh.x, y: wh.y, id: 2 }]);
+  await simWait(0.3);
+  const d0 = await st(); console.log('rolled to brake', JSON.stringify(d0));
+  ok(d0.thr === -1, 'rolling the thumb from gas to brake brakes without lifting');
+  await simWait(4.0);
+  const d = await st(); console.log('brake held', JSON.stringify(d));
+  ok(d.v < -0.5, 'holding brake stops then reverses');
   await T('touchEnd', []);
-  // speed up again then lift
-  await resetSpot();
-  await simWait(0.6);
-  await T('touchStart', [{ x: X, y: Y, id: 3 }]); await simWait(2.5);
-  const e0 = await st();
-  await T('touchEnd', []);
-  await simWait(3.0);
-  const e1 = await st(); console.log('lift', JSON.stringify(e0), '->', JSON.stringify(e1));
-  ok(Math.abs(e1.v) < 1.0, 'lifting the thumb stops the car within 3 s (from ' + e0.v + ' m/s)');
+  await simWait(0.5);
+  const e = await st();
+  ok(e.thr === 0 && e.steer === 0, 'releasing everything zeroes the inputs');
+  // coast: gas then release -> slows gently, no auto acceleration
+  await resetSpot(); await simWait(0.8);
+  await T('touchStart', [{ x: gas.x, y: gas.y, id: 3 }]); await simWait(2.5);
+  const f0 = await st(); await T('touchEnd', []); await simWait(2.0); const f1 = await st();
+  console.log('coast', JSON.stringify(f0), '->', JSON.stringify(f1));
+  ok(f1.v < f0.v && f1.v > 0.5, 'releasing gas coasts and slows down (no auto throttle, no hard stop)');
   await snap('ctl_after');
 }
 else if (scenario.startsWith('wadecam')) {
@@ -160,6 +160,22 @@ else if (scenario.startsWith('wadecam')) {
   await drive(0.75, 0.25); await simWait(1.2); await snap('wadecam2');
   const st = await page.evaluate(() => ({ v: window.__mb.car.speed, wade: window.__mb.car.wade }));
   console.log('wade', JSON.stringify(st));
+}
+else if (scenario.startsWith('fx')) {
+  // identity check: RenderPass + OutputPass (no effect passes) must match the direct render
+  await drive(0, 0); await wait(1500);
+  const grab = async (name) => { await page.screenshot({ path: `${out}/${name}.png` }); return page.screenshot(); };
+  await page.evaluate(() => window.__mb.setFx(0)); await wait(400); const a = await grab('fx0_direct');
+  await page.evaluate(() => window.__mb.setFx(0)); await wait(400); const a2 = await grab('fx0_direct2');
+  await page.evaluate(() => { const mb = window.__mb; mb.setFx(1); mb.post.passes.grade.enabled = false; }); await wait(400); const b = await grab('fx_identity');
+  await page.evaluate(() => window.__mb.setFx(1)); await wait(400); await grab('fx1_grade');
+  await page.evaluate(() => window.__mb.setFx(2)); await wait(400); await grab('fx2_tilt');
+  await page.evaluate(() => window.__mb.setFx(3)); await wait(400); await grab('fx3_bloom');
+  const info = await page.evaluate(() => ({ broken: window.__mb.post.broken, level: window.__mb.post.level }));
+  console.log('post', JSON.stringify(info));
+  const { PNG } = await import('file://' + resolve('dev/png.mjs'));
+  const diff = (p, q) => { const A = PNG(p), B = PNG(q); let s = 0; for (let i = 0; i < A.length; i++) s += Math.abs(A[i] - B[i]); return (s / A.length).toFixed(2); };
+  console.log('mean abs diff direct vs direct (1 frame later):', diff(a, a2), ' direct vs composer identity:', diff(a, b));
 }
 else if (scenario.startsWith('perf')) {
   // fixed-quality perf proxy: frame ms under SwiftShader, JS ms per frame, tris & calls

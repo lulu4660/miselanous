@@ -14,6 +14,7 @@ import { createParticles, createTracks } from './gfx/fx.js';
 import { createBirds } from './gfx/birds.js';
 import { createFish } from './gfx/fish.js';
 import { createInput } from './input.js';
+import { createPost } from './gfx/post.js';
 import { createAudio } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
@@ -31,9 +32,9 @@ async function boot(hot) {
   const coarse = matchMedia('(pointer: coarse)').matches;
   // Phones (Apple GPUs) resolve MSAA on-chip, so AA is cheap; pixel count is what costs.
   const TIERS = {
-    high: { dpr: 2, shadow: 2048, grass: 5200, aa: true, scale: 1 },
-    medium: { dpr: 1.5, shadow: 1024, grass: 3200, aa: true, scale: 0.85 },
-    low: { dpr: 1.2, shadow: 1024, grass: 1800, aa: true, scale: 0.75 },
+    high: { dpr: 2, shadow: 2048, grass: 5200, aa: true, scale: 1, fx: 3 },
+    medium: { dpr: 1.5, shadow: 1024, grass: 3200, aa: true, scale: 0.85, fx: 2 },
+    low: { dpr: 1.2, shadow: 1024, grass: 1800, aa: true, scale: 0.75, fx: 1 },
   };
   const tierName = params.get('q') || (coarse ? 'medium' : 'high');
   const quality = TIERS[tierName] || TIERS.medium;
@@ -58,6 +59,7 @@ async function boot(hot) {
     camera.fov = portrait ? 52 : 36;
     camera.updateProjectionMatrix();
     particles?.setScale(h * renderer.getPixelRatio(), camera.fov);
+    post?.setSize(w, h, renderer.getPixelRatio());
   };
 
   const scene = new THREE.Scene();
@@ -65,6 +67,12 @@ async function boot(hot) {
   scene.fog = new THREE.Fog(PALETTE.fog.clone(), 30, 170);
   const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 2600);
   let particles = null;
+  let post = null;
+  try { post = createPost(renderer, scene, camera); } catch (e) { console.warn('post-processing unavailable', e); post = null; }
+  let fxWanted = quality.fx;
+  try { if (localStorage.getItem('mb-fx') === '0') fxWanted = 0; } catch (e) { /* ignore */ }
+  let fxLevel = fxWanted;
+  post?.setLevel(fxLevel);
 
   await progress(0.08, 'Le sable se met en place…');
   U.uNoise.value = makeNoiseTexture(256);
@@ -146,10 +154,10 @@ async function boot(hot) {
   };
   updateSoundIcon();
 
-  const input = createInput({ zone: $('zone'), steerUI: $('steer'), knob: $('knob'), buttons: { reverse: $('rev'), horn: $('horn') } });
+  const input = createInput({ wheel: $('wheel'), wheelKnob: $('wheelKnob'), pedals: $('pedals'), gas: $('gasP'), brake: $('brakeP'), horn: $('horn') });
   const touchUI = !matchMedia('(hover: hover) and (pointer: fine)').matches;
   $('how').innerHTML = touchUI
-    ? 'Un pouce suffit : <b>pose-le</b> pour avancer, <b>glisse</b> pour tourner, <b>lâche</b> pour freiner.'
+    ? '<b>À gauche</b> : glisse ou touche les flèches pour tourner. <b>À droite</b> : Avancer, et Frein pour t\'arrêter puis reculer.'
     : '<b>Flèches</b> ou <b>ZQSD / WASD</b> pour conduire · <b>Espace</b> frein à main · <b>K</b> klaxon';
 
   // ---------- UI
@@ -175,10 +183,6 @@ async function boot(hot) {
     document.activeElement?.blur?.();
     $('title').classList.add('gone');
     $('hud').classList.add('on');
-    if (touchUI) {
-      $('hint').classList.add('on');
-      input.onFirstUse = () => setTimeout(() => $('hint').classList.remove('on'), 2500);
-    }
     setTimeout(() => toast('Trouve les 12 coquillages', 'Suis les rayons dorés', 3200), 600);
     try { navigator.wakeLock?.request?.('screen').catch(() => {}); } catch (e) { /* optional */ }
   };
@@ -187,6 +191,17 @@ async function boot(hot) {
   // any touch re-unlocks audio inside a gesture (iOS suspends it after interruptions)
   window.addEventListener('pointerdown', () => { if (game.mode === 'play') audio.unlock(); }, { passive: true });
   for (const id of ['btnSound', 'btnReset', 'endBtn', 'play']) $(id).addEventListener('click', (e) => e.currentTarget.blur());
+  const updateFxIcon = () => { $('btnFx').setAttribute('aria-pressed', String(fxLevel > 0)); $('btnFx').classList.toggle('off', fxLevel === 0); };
+  if (!post || post.broken) $('btnFx').hidden = true;
+  updateFxIcon();
+  $('btnFx').addEventListener('click', () => {
+    audio.uiTap?.();
+    fxLevel = fxLevel > 0 ? 0 : Math.max(1, quality.fx);
+    post?.setLevel(fxLevel);
+    try { localStorage.setItem('mb-fx', fxLevel > 0 ? '1' : '0'); } catch (e) { /* ignore */ }
+    updateFxIcon();
+  });
+  $('btnFx').addEventListener('click', (e) => e.currentTarget.blur());
   $('btnSound').addEventListener('click', () => {
     audio.unlock();
     audio.setMuted(!audio.isMuted());
@@ -384,7 +399,7 @@ async function boot(hot) {
   let hudT = 0, perfAcc = 0, perfN = 0, perfT = 0, hornWas = false, fpsShown = 60;
   $('speed').addEventListener('click', () => { $('perf').hidden = !$('perf').hidden; $('perf').textContent = '…'; });
   const frameTimes = [];
-  window.__mb = { phys, car, game, camera, renderer, scene, start, quality, layout, terrain };
+  window.__mb = { phys, car, game, camera, renderer, scene, start, quality, layout, terrain, post, setFx: (n) => { fxLevel = n; post?.setLevel(n); } };
 
   function frame(now) {
     requestAnimationFrame(frame);
@@ -476,7 +491,11 @@ async function boot(hot) {
     }
 
     updateEdge(nearest);
-    renderer.render(scene, camera);
+    if (post) {
+      edgeP.set(car.pos.x, car.pos.y + 0.5, car.pos.z).project(camera);
+      post.setFocus(Math.max(0.15, Math.min(0.85, edgeP.y * 0.5 + 0.5)));
+      post.render(dt);
+    } else renderer.render(scene, camera);
 
     // adaptive resolution (rAF is capped at the display rate, so "fast" means at the cap)
     perfAcc += dt; perfN++; perfT += dt; upCooldown -= dt;
@@ -485,15 +504,19 @@ async function boot(hot) {
       perfAcc = 0; perfN = 0; perfT = 0;
       fpsShown = 1 / avg;
       if (!lockQuality) {
-        if (avg > 0.0215 && renderScale > 0.5) {
-          renderScale = Math.max(0.5, renderScale - (avg > 0.03 ? 0.15 : 0.08));
-          maxScale = Math.min(maxScale, renderScale + 0.08);
-          upCooldown = 10; applySize();
-        } else if (avg < 0.0178 && renderScale < maxScale - 0.001 && upCooldown <= 0) {
-          renderScale = Math.min(maxScale, renderScale + 0.05); upCooldown = 4; applySize();
+        // ladder: drop effects (bloom, then tilt-shift) before dropping resolution
+        if (avg > 0.0215) {
+          if (post && fxLevel > 1) { fxLevel--; post.setLevel(fxLevel); upCooldown = 12; }
+          else if (renderScale > 0.5) {
+            renderScale = Math.max(0.5, renderScale - (avg > 0.03 ? 0.15 : 0.08));
+            maxScale = Math.min(maxScale, renderScale + 0.08);
+            upCooldown = 10; applySize();
+          } else if (post && fxLevel > 0) { fxLevel = 0; post.setLevel(0); }
+        } else if (avg < 0.0178 && upCooldown <= 0) {
+          if (renderScale < maxScale - 0.001) { renderScale = Math.min(maxScale, renderScale + 0.05); upCooldown = 4; applySize(); }
         }
       }
-      if (!$('perf').hidden) $('perf').textContent = `${Math.round(fpsShown)} i/s · ${renderer.getPixelRatio().toFixed(2)}x · ${tierName}`;
+      if (!$('perf').hidden) $('perf').textContent = `${Math.round(fpsShown)} i/s · ${renderer.getPixelRatio().toFixed(2)}x · fx ${post ? (post.broken ? 'off!' : post.level) : '—'} · ${tierName}`;
     }
     frameTimes.push(dt); if (frameTimes.length > 120) frameTimes.shift();
   }
