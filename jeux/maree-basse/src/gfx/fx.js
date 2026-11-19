@@ -73,10 +73,13 @@ export function createParticles(max = 900) {
       }
     },
     spray(x, y, z, vx, vz, amount) {
+      // rooster tail: thrown up and slightly back/out from the tyre
+      const side = (Math.random() - 0.5) * 2.2;
+      const l = Math.hypot(vx, vz) || 1;
       spawn({
-        x: x + (Math.random() - 0.5) * 0.4, y, z: z + (Math.random() - 0.5) * 0.4,
-        vx: vx * 0.3 + (Math.random() - 0.5) * 1.5, vy: 1.5 + Math.random() * 2.5 * amount, vz: vz * 0.3 + (Math.random() - 0.5) * 1.5,
-        max: 0.5 + Math.random() * 0.4, s0: 0.1 + Math.random() * 0.12, s1: 0.04, color: '#ffffff', type: 1,
+        x: x + (Math.random() - 0.5) * 0.3, y, z: z + (Math.random() - 0.5) * 0.3,
+        vx: vx * 0.45 - vz / l * side + (Math.random() - 0.5), vy: 1.8 + Math.random() * 3.5 * amount, vz: vz * 0.45 + vx / l * side + (Math.random() - 0.5),
+        max: 0.45 + Math.random() * 0.45, s0: 0.14 + Math.random() * 0.2 * amount, s1: 0.05, color: Math.random() < 0.8 ? '#ffffff' : '#c8f1ee', type: 1,
       });
     },
     dust(x, y, z, vx, vz, color = '#ead2a8') {
@@ -130,12 +133,12 @@ export function createParticles(max = 900) {
 export function createTracks(count = 4, segs = 420) {
   const group = new THREE.Group();
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color('#7a5a3e') }, uFogColor: { value: new THREE.Color() }, uFogDensity: { value: 0 } },
+    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color('#7a5a3e') }, uFogColor: { value: new THREE.Color() }, uFogNear: { value: 30 }, uFogFar: { value: 170 } },
     vertexShader: /* glsl */`
       attribute float aBirth; attribute float aStrength;
       uniform float uTime;
       varying float vA; varying float vEdge; varying float vFog;
-      uniform float uFogDensity;
+      uniform float uFogNear; uniform float uFogFar;
       attribute float aSide;
       void main() {
         float age = uTime - aBirth;
@@ -143,7 +146,7 @@ export function createTracks(count = 4, segs = 420) {
         vEdge = aSide;
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         float d = length(mv.xyz);
-        vFog = 1.0 - exp(-uFogDensity * uFogDensity * d * d);
+        vFog = smoothstep(uFogNear, uFogFar, d);
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */`
@@ -209,7 +212,7 @@ export function createTracks(count = 4, segs = 420) {
     update(time, fog) {
       mat.uniforms.uTime.value = time;
       mat.uniforms.uFogColor.value.copy(fog.color);
-      mat.uniforms.uFogDensity.value = fog.density;
+      mat.uniforms.uFogNear.value = fog.near; mat.uniforms.uFogFar.value = fog.far;
       for (const R of ribbons) {
         if (!R.dirty) continue;
         R.geo.attributes.position.needsUpdate = true;

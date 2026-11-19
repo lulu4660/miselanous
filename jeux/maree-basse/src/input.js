@@ -1,63 +1,65 @@
-// Touch joystick (floating, left side), hold buttons, keyboard. Produces a camera-relative
-// direction intent that the game turns into steer/throttle.
+// Touch: one thumb is wheel + accelerator. Put it down anywhere on the play area to drive
+// forward; slide it left/right to steer (analog, car-relative); lift it and the car brakes
+// to a stop. A hold button reverses (works together with the steering thumb). Keyboard too.
 
-export function createInput({ zone, stick, knob, buttons }) {
+export function createInput({ zone, steerUI, knob, buttons }) {
   const state = {
-    joy: { active: false, x: 0, y: 0, id: null, ox: 0, oy: 0 },
+    drag: { active: false, id: null, ox: 0, x: 0, y0: 0 },
     keys: new Set(),
-    handbrake: false, horn: false,
-    usedTouch: false, usedKeys: false,
+    reverse: false, horn: false,
     onFirstUse: null,
   };
-  const R = 62; // px radius of travel
+  const RANGE = 64; // px of horizontal travel for full lock
   const first = () => { if (state.onFirstUse) { const f = state.onFirstUse; state.onFirstUse = null; f(); } };
 
-  function setKnob(dx, dy) {
-    knob.style.transform = `translate(${dx}px, ${dy}px)`;
-  }
+  const showSteer = (x, y) => { steerUI.style.left = `${x}px`; steerUI.style.top = `${y}px`; steerUI.classList.add('on'); };
+  const setKnob = (v) => { knob.style.transform = `translateX(${v * RANGE}px)`; };
+
   zone.addEventListener('pointerdown', (e) => {
-    if (state.joy.active) return;
+    const d = state.drag;
+    if (d.active) return;
     e.preventDefault();
-    state.usedTouch = true;
     first();
-    zone.setPointerCapture?.(e.pointerId);
-    const j = state.joy;
-    j.active = true; j.id = e.pointerId; j.ox = e.clientX; j.oy = e.clientY; j.x = 0; j.y = 0;
-    stick.style.left = `${e.clientX}px`; stick.style.top = `${e.clientY}px`;
-    stick.classList.add('on');
-    setKnob(0, 0);
+    try { zone.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    d.active = true; d.id = e.pointerId; d.ox = e.clientX; d.x = 0; d.y0 = e.clientY;
+    showSteer(e.clientX, e.clientY);
+    setKnob(0);
   });
-  const move = (e) => {
-    const j = state.joy;
-    if (!j.active || e.pointerId !== j.id) return;
+  zone.addEventListener('pointermove', (e) => {
+    const d = state.drag;
+    if (!d.active || e.pointerId !== d.id) return;
     e.preventDefault();
-    let dx = e.clientX - j.ox, dy = e.clientY - j.oy;
-    const l = Math.hypot(dx, dy);
-    if (l > R) {
-      // drag the origin along so direction changes stay responsive
-      const over = l - R;
-      j.ox += (dx / l) * over; j.oy += (dy / l) * over;
-      stick.style.left = `${j.ox}px`; stick.style.top = `${j.oy}px`;
-      dx = (dx / l) * R; dy = (dy / l) * R;
-    }
-    j.x = dx / R; j.y = -dy / R;
-    setKnob(dx, dy);
-  };
+    // origin stays where the thumb landed: coming back to it always means "straight"
+    let dx = e.clientX - d.ox;
+    const DZ = 6;
+    dx = Math.abs(dx) < DZ ? 0 : dx - Math.sign(dx) * DZ;
+    d.x = Math.max(-1, Math.min(1, dx / (RANGE - DZ)));
+    setKnob(d.x);
+  });
   const end = (e) => {
-    const j = state.joy;
-    if (!j.active || e.pointerId !== j.id) return;
-    j.active = false; j.x = 0; j.y = 0; j.id = null;
-    stick.classList.remove('on');
-    setKnob(0, 0);
+    const d = state.drag;
+    if (!d.active || e.pointerId !== d.id) return;
+    d.active = false; d.id = null; d.x = 0;
+    steerUI.classList.remove('on');
+    setKnob(0);
   };
-  zone.addEventListener('pointermove', move);
   zone.addEventListener('pointerup', end);
   zone.addEventListener('pointercancel', end);
   zone.addEventListener('lostpointercapture', end);
 
   for (const [name, el] of Object.entries(buttons)) {
-    const down = (e) => { e.preventDefault(); state[name] = true; el.classList.add('down'); first(); el.setPointerCapture?.(e.pointerId); };
-    const up = () => { state[name] = false; el.classList.remove('down'); };
+    let pid = null;
+    const down = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (pid !== null) return;
+      pid = e.pointerId;
+      state[name] = true; el.classList.add('down'); first();
+      try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    };
+    const up = (e) => {
+      if (pid !== null && e.pointerId !== pid) return;
+      pid = null; state[name] = false; el.classList.remove('down');
+    };
     el.addEventListener('pointerdown', down);
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
@@ -78,21 +80,33 @@ export function createInput({ zone, stick, knob, buttons }) {
     if (e.target && /INPUT|TEXTAREA|BUTTON/.test(e.target.tagName) && e.code === 'Space') return;
     e.preventDefault();
     state.keys.add(k);
-    state.usedKeys = true;
     first();
   });
   window.addEventListener('keyup', (e) => { const k = KEYMAP[e.code]; if (k) state.keys.delete(k); });
-  window.addEventListener('blur', () => { state.keys.clear(); state.joy.active = false; state.joy.x = state.joy.y = 0; stick.classList.remove('on'); });
+  const reset = () => {
+    state.keys.clear(); state.drag.active = false; state.drag.x = 0; state.drag.id = null;
+    state.reverse = false; state.horn = false;
+    steerUI.classList.remove('on'); setKnob(0);
+    for (const el of Object.values(buttons)) el.classList.remove('down');
+  };
+  window.addEventListener('blur', reset);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); });
 
-  // Returns { mode: 'dir'|'car', x, y, handbrake, horn }
+  // Returns car-relative commands: steer (-1 right .. +1 left), throttle (-1..1), brake (0..1)
   state.read = function () {
     const K = state.keys;
-    const kx = (K.has('right') ? 1 : 0) - (K.has('left') ? 1 : 0);
-    const ky = (K.has('up') ? 1 : 0) - (K.has('down') ? 1 : 0);
-    const hb = state.handbrake || K.has('hb');
+    const d = state.drag;
     const horn = state.horn || K.has('horn');
-    if (state.joy.active) return { mode: 'dir', x: state.joy.x, y: state.joy.y, handbrake: hb, horn };
-    return { mode: 'car', x: kx, y: ky, handbrake: hb, horn };
+    if (K.size && !K.has('horn')) {
+      const kx = (K.has('right') ? 1 : 0) - (K.has('left') ? 1 : 0);
+      const ky = (K.has('up') ? 1 : 0) - (K.has('down') ? 1 : 0);
+      return { steer: -kx, throttle: ky, brake: ky === 0 ? 0.6 : 0, handbrake: K.has('hb'), horn, touching: false };
+    }
+    // analog steering with a gentle response curve (finer control near centre)
+    const sx = d.active ? Math.sign(d.x) * Math.pow(Math.abs(d.x), 1.35) : 0;
+    if (state.reverse) return { steer: -sx, throttle: -1, brake: 0, handbrake: false, horn, touching: true };
+    if (d.active) return { steer: -sx, throttle: 1, brake: 0, handbrake: false, horn, touching: true };
+    return { steer: 0, throttle: 0, brake: 0.6, handbrake: K.has('hb'), horn, touching: false };
   };
   return state;
 }

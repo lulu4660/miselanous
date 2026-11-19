@@ -66,7 +66,7 @@ export function createVehicle(terrain, water) {
     pos: v3(), q: q4(), vel: v3(), angVel: v3(),
     R: new Float64Array(9),
     steer: 0, throttle: 0, brake: 0, handbrake: false,
-    input: { steer: 0, throttle: 0, handbrake: false },
+    input: { steer: 0, throttle: 0, brake: 0, handbrake: false },
     wheels: CAR.wheels.map((w) => ({
       ...w, local: v3(w.x, w.y, w.z),
       compression: 0, prevCompression: 0, grounded: false, contact: v3(), normal: v3(0, 1, 0),
@@ -188,7 +188,9 @@ export function createVehicle(terrain, water) {
     } else if (thr < -0.02) {
       if (speedF > 0.6) brake = -thr; else drive = thr; // negative = reverse
     }
+    if (drive === 0 && inp.brake > 0) brake = Math.max(brake, Math.min(1, inp.brake));
     car.throttle = thr;
+    car.brake = brake;
     let engineF = 0;
     if (drive > 0) {
       const k = Math.max(0, 1 - Math.pow(Math.max(0, speedF) / CAR.topSpeed, 2.2));

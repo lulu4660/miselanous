@@ -7,46 +7,28 @@ import { mulberry32 } from '../noise.js';
 
 const up = new THREE.Vector3(0, 1, 0);
 
-function bladeTuft(rnd, { blades = 15, hMin = 0.35, hMax = 0.8, base = '#8a7a36', tip = '#f6dc86', spread = 0.42, width = 0.075, reed = false }) {
+// Low-poly tuft: each blade is a single tapered triangle (cheap, reads well from above).
+function bladeTuft(rnd, { blades = 6, hMin = 0.4, hMax = 0.85, base = '#9a8a4a', tip = '#ecc96a', spread = 0.4, width = 0.11, reed = false }) {
   const pos = [], col = [], nor = [], sway = [];
-  const cb = new THREE.Color(base), ct = new THREE.Color(tip), c = new THREE.Color();
+  const cb = new THREE.Color(base), ct = new THREE.Color(tip);
   for (let b = 0; b < blades; b++) {
-    const a = rnd() * Math.PI * 2;
+    const a = (b / blades) * Math.PI * 2 + rnd() * 0.8;
     const r0 = rnd() * spread * 0.5;
     const ox = Math.cos(a) * r0, oz = Math.sin(a) * r0;
     const h = hMin + rnd() * (hMax - hMin);
-    const lean = (0.15 + rnd() * 0.35) * (reed ? 0.3 : 1);
-    const dx = Math.cos(a) * lean, dz = Math.sin(a) * lean;
-    const px = -Math.sin(a), pz = Math.cos(a); // perpendicular for width
-    const segs = 3;
-    const pts = [];
-    for (let s = 0; s <= segs; s++) {
-      const t = s / segs;
-      const w = width * (1 - t * 0.85);
-      const x = ox + dx * t * t * h, y = h * t, z = oz + dz * t * t * h;
-      pts.push([x - px * w, y, z - pz * w, t], [x + px * w, y, z + pz * w, t]);
-    }
-    for (let s = 0; s < segs; s++) {
-      const q = [pts[s * 2], pts[s * 2 + 1], pts[s * 2 + 2], pts[s * 2 + 3]];
-      for (const k of [0, 2, 1, 1, 2, 3]) {
-        const p = q[k];
-        pos.push(p[0], p[1], p[2]);
-        c.copy(cb).lerp(ct, Math.pow(p[3], 0.8));
-        col.push(c.r, c.g, c.b);
-        nor.push(0, 1, 0);
-        sway.push(1);
-      }
-    }
-    if (reed && rnd() < 0.7) {
-      // cattail head
-      const hx = ox + dx * h, hz = oz + dz * h;
-      const cap = new THREE.CylinderGeometry(0.035, 0.035, 0.2, 5).toNonIndexed();
-      cap.translate(hx, h * 0.92, hz);
-      const cp = cap.attributes.position;
-      for (let i = 0; i < cp.count; i++) {
-        pos.push(cp.getX(i), cp.getY(i), cp.getZ(i));
-        col.push(0.42, 0.27, 0.17);
-        nor.push(0, 1, 0); sway.push(1);
+    const lean = (0.12 + rnd() * 0.3) * (reed ? 0.25 : 1) * h;
+    const px = -Math.sin(a) * width, pz = Math.cos(a) * width;
+    const tx = ox + Math.cos(a) * lean, tz = oz + Math.sin(a) * lean;
+    pos.push(ox - px, 0, oz - pz, ox + px, 0, oz + pz, tx, h, tz);
+    col.push(cb.r, cb.g, cb.b, cb.r, cb.g, cb.b, ct.r, ct.g, ct.b);
+    nor.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
+    sway.push(1, 1, 1);
+    if (reed && rnd() < 0.6) {
+      // little cattail head as a thin diamond
+      const hy = h * 0.88, w = 0.05;
+      const quads = [[tx - w, hy, tz], [tx + w, hy, tz], [tx, hy + 0.22, tz], [tx, hy - 0.06, tz]];
+      for (const [i0, i1, i2] of [[0, 1, 2], [1, 0, 3]]) {
+        for (const q of [quads[i0], quads[i1], quads[i2]]) { pos.push(q[0], q[1], q[2]); col.push(0.46, 0.3, 0.19); nor.push(0, 1, 0); sway.push(1); }
       }
     }
   }
@@ -235,16 +217,17 @@ export function createVegetation(terrain, layout, quality) {
   const rnd = mulberry32(4242);
 
   // --- Grass tufts (golden), sea oats on dunes, reeds in shallows
-  const grassMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), { wind: 0.14, push: 2.4, caustics: false, underwater: true });
+  const grassMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), { wind: 0.14, push: 2.4, underwater: true });
   const tuftGeos = [0, 1, 2].map(() => bladeTuft(rnd, {}));
-  const oatGeo = bladeTuft(rnd, { blades: 12, hMin: 0.55, hMax: 1.15, base: '#9a8a52', tip: '#f8e6ae', width: 0.05, spread: 0.35 });
-  const reedGeo = bladeTuft(rnd, { blades: 11, hMin: 0.9, hMax: 1.6, base: '#56653a', tip: '#c2b76a', width: 0.045, reed: true, spread: 0.35 });
+  const oatGeo = bladeTuft(rnd, { blades: 7, hMin: 0.6, hMax: 1.1, base: '#a39062', tip: '#f6e3b0', width: 0.07, spread: 0.35 });
+  const reedGeo = bladeTuft(rnd, { blades: 6, hMin: 0.9, hMax: 1.5, base: '#6b7a43', tip: '#c9be72', width: 0.06, reed: true, spread: 0.3 });
   const tufts = [[], [], []], oats = [], reeds = [];
   const budget = quality.grass;
   const half = terrain.half - 2;
   const reserved = layout.reserved;
   const nearReserved = (x, z) => reserved.some((q) => (q.x - x) ** 2 + (q.z - z) ** 2 < (q.r * 0.8) ** 2);
   let placed = 0;
+  const nrmTmp = [0, 1, 0];
   for (let k = 0; k < budget * 6 && placed < budget; k++) {
     const cx = (rnd() * 2 - 1) * half, cz = (rnd() * 2 - 1) * half;
     const ch = terrain.heightAt(cx, cz);
@@ -262,6 +245,7 @@ export function createVegetation(terrain, layout, quality) {
       const x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
       const h = terrain.heightAt(x, z);
       if (h < 0.12 || nearReserved(x, z)) continue;
+      terrain.normalAt(x, z, nrmTmp); if (nrmTmp[1] < 0.82) continue;
       tufts[placed % 3].push({ x, z, y: h - 0.03, s: (0.7 + rnd() * 0.6) * (1 - d / rad * 0.35), rot: rnd() * 6.28, hue: hue + (rnd() - 0.5) * 0.3 });
       placed++;
     }
@@ -302,14 +286,13 @@ export function createVegetation(terrain, layout, quality) {
   // --- Bushes
   const bushParts = [];
   for (let k = 0; k < 3; k++) {
-    const b = blob(rnd, 0.55 + rnd() * 0.25, 2);
-    { const p = b.attributes.position, nn = b.attributes.normal; for (let i = 0; i < p.count; i++) { const v = new THREE.Vector3(p.getX(i), p.getY(i) + 0.15, p.getZ(i)).normalize(); nn.setXYZ(i, v.x, v.y, v.z); } }
+    const b = blob(rnd, 0.55 + rnd() * 0.25, 1);
     place(b, { x: (rnd() - 0.5) * 0.8, y: 0.3 + rnd() * 0.15, z: (rnd() - 0.5) * 0.8 });
-    colorizeFn(b, (x, y) => (y > 0.55 ? '#b9b866' : y > 0.25 ? '#97a050' : '#6f8243'));
+    colorizeFn(b, (x, y) => (y > 0.5 ? '#aebb5c' : y > 0.2 ? '#8d9f48' : '#6c853c'));
     bushParts.push(b);
   }
   const bushGeo = merge(bushParts);
-  const bushMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true }), { caustics: false, cutout: 1, detail: 1 });
+  const bushMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), { cutout: 1 });
   group.add(chunkedInstances(bushGeo, bushMat, layout.bushes.map((b) => ({ ...b, y: b.y - 0.1 })), {
     cast: true, color: (it) => new THREE.Color().setHSL(0.17 + (it.hue - 0.5) * 0.08, 0.45, 0.85 + it.hue * 0.2),
   }));
@@ -325,7 +308,7 @@ export function createVegetation(terrain, layout, quality) {
       p.setXYZ(i, x * n * (1 + v * 0.1), y * n * 0.72, z * n);
     }
     g.computeVertexNormals();
-    return colorizeFn(g, (x, y) => (y > 0.45 ? '#e2c2a2' : y > 0 ? '#cf9f86' : '#b48979'));
+    return colorizeFn(g, (x, y) => (y > 0.45 ? '#dc9f7a' : y > 0 ? '#c27a5c' : '#a8604a'));
   });
   const rocksBy = [[], [], [], []];
   for (const r of layout.rocks) rocksBy[r.variant].push({ x: r.x, z: r.z, y: r.y - r.s * 0.25, s: r.s, rot: r.rot, tilt: r.tilt, sy: r.s * (0.8 + hash01(r.x) * 0.5) });

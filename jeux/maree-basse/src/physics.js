@@ -47,6 +47,20 @@ export function createPhysics(terrain) {
       // entering water (crossing the surface downward)
       if (!Number.isNaN(py) && py <= 0 && depth > 0) splashV = Math.max(splashV, -car.vel.y, sp * 0.25);
     }
+    // Wheels churning through shallow water: ripples + foam trails behind each tyre
+    const vx = car.vel.x, vz = car.vel.z, sp = Math.hypot(vx, vz);
+    for (const w of car.wheels) {
+      if (!w.grounded) continue;
+      const wl = water.levelAt(w.contact.x, w.contact.z);
+      const dep = wl - w.contact.y;
+      if (dep < 0.03) continue;
+      const k = Math.min(1, dep / 0.35);
+      if (sp > 0.8) {
+        waves.disturb(w.contact.x, w.contact.z, -k * Math.min(sp, 14) * 0.05, 0.6);
+        waves.disturb(w.contact.x + vx / sp * 0.9, w.contact.z + vz / sp * 0.9, k * Math.min(sp, 14) * 0.025, 0.6);
+        waves.addFoam(w.contact.x - vx / sp * 0.4, w.contact.z - vz / sp * 0.4, k * Math.min(1, sp / 6) * 0.22, 0.55);
+      }
+    }
     if (splashV > 1.6) {
       const I = Math.min(1, splashV / 9);
       events.push({ type: 'carSplash', intensity: I, x: car.pos.x, z: car.pos.z });

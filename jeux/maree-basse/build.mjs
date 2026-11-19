@@ -12,7 +12,7 @@ let js = res.outputFiles[0].text.replace(/from\s*"three"/g, `from"${THREE_URL}"`
 if (/from\s*"three"/.test(js) || /import\("three"\)/.test(js)) throw new Error('unresolved three import');
 js = js.replace(/<\/script/gi, '<\\/script');
 const tpl = readFileSync('src/template.html', 'utf8');
-const page = tpl.replace('<!--BUNDLE-->', `<script type="module">${js}</script>`);
+const page = tpl.replace('<!--BUNDLE-->', () => `<script type="module">${js}</script>`);
 mkdirSync('dist', { recursive: true });
 writeFileSync('dist/index.html', page);
 writeFileSync('dist/play.html', `<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">\n</head>\n<body>\n${page}\n</body>\n</html>\n`);

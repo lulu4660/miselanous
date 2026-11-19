@@ -139,3 +139,34 @@ test('car floats/wades in deep water instead of sinking, and wakes the water', (
   assert.ok(c.speed > 0.8 && c.speed < 8, 'slow paddling');
   assert.ok(energy > 5, 'creates ripples');
 });
+
+test('after a full-lock turn, centred steering settles into a straight line', () => {
+  const t = flatTerrain(0.5);
+  const phys = createPhysics(t);
+  phys.car.reset(0, -100, 0);
+  phys.car.input.throttle = 1;
+  run(phys, 2.5);
+  phys.car.input.steer = -1;
+  run(phys, 1.5);
+  phys.car.input.steer = 0;
+  run(phys, 1.5);
+  const yawRate = phys.car.angVel.y;
+  const yaw0 = Math.atan2(phys.car.R[2], phys.car.R[8]);
+  run(phys, 1.0);
+  const yaw1 = Math.atan2(phys.car.R[2], phys.car.R[8]);
+  console.log(`  yaw rate after settle ${yawRate.toFixed(3)} rad/s, drift over 1 s ${(yaw1 - yaw0).toFixed(3)} rad`);
+  assert.ok(Math.abs(yawRate) < 0.05 && Math.abs(yaw1 - yaw0) < 0.04);
+});
+
+test('releasing the controls brakes to a stop (lift-off brake)', () => {
+  const t = flatTerrain(0.5);
+  const phys = createPhysics(t);
+  phys.car.reset(0, -100, 0);
+  phys.car.input.throttle = 1;
+  run(phys, 6);
+  const v0 = phys.car.forwardSpeed;
+  phys.car.input.throttle = 0; phys.car.input.brake = 0.6;
+  run(phys, 3.2);
+  console.log(`  ${v0.toFixed(1)} m/s -> ${phys.car.forwardSpeed.toFixed(2)} m/s after 3.2 s`);
+  assert.ok(Math.abs(phys.car.forwardSpeed) < 1);
+});

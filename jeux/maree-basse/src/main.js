@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { createTerrain, SURF, SURF_NAME } from './terrain.js';
 import { createLayout } from './layout.js';
 import { createPhysics } from './physics.js';
-import { U, PALETTE, makeNoiseTexture } from './gfx/shaders.js';
+import { U, PALETTE, makeNoiseTexture, makeCellTexture } from './gfx/shaders.js';
 import { createTerrainMesh } from './gfx/terrainMesh.js';
 import { createWater } from './gfx/water.js';
 import { createSky } from './gfx/sky.js';
@@ -29,10 +29,11 @@ async function boot(hot) {
 
   // ---------- Quality
   const coarse = matchMedia('(pointer: coarse)').matches;
+  // Phones (Apple GPUs) resolve MSAA on-chip, so AA is cheap; pixel count is what costs.
   const TIERS = {
-    high: { dpr: 2, shadow: 2048, grass: 9000, aa: true },
-    medium: { dpr: 1.6, shadow: 1536, grass: 6500, aa: false },
-    low: { dpr: 1.15, shadow: 1024, grass: 3500, aa: false },
+    high: { dpr: 2, shadow: 2048, grass: 5200, aa: true, scale: 1 },
+    medium: { dpr: 1.5, shadow: 1024, grass: 3200, aa: true, scale: 0.85 },
+    low: { dpr: 1.2, shadow: 1024, grass: 1800, aa: true, scale: 0.75 },
   };
   const tierName = params.get('q') || (coarse ? 'medium' : 'high');
   const quality = TIERS[tierName] || TIERS.medium;
@@ -43,28 +44,31 @@ async function boot(hot) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.aa, powerPreference: 'high-performance', preserveDrawingBuffer: params.has('shot') });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
-  renderer.toneMappingExposure = 1.22;
+  renderer.toneMappingExposure = 1.28;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  let renderScale = 1;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  let renderScale = quality.scale;
+  let maxScale = 1, upCooldown = 4;
   const applySize = () => {
     const w = window.innerWidth, h = window.innerHeight;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.dpr) * renderScale);
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     const portrait = h > w;
-    camera.fov = portrait ? 56 : 44;
+    camera.fov = portrait ? 52 : 36;
     camera.updateProjectionMatrix();
     particles?.setScale(h * renderer.getPixelRatio(), camera.fov);
   };
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(PALETTE.fog.clone(), 0.0042);
+  // linear haze that starts just beyond the car, whatever the camera distance
+  scene.fog = new THREE.Fog(PALETTE.fog.clone(), 30, 170);
   const camera = new THREE.PerspectiveCamera(50, 1, 0.3, 2600);
   let particles = null;
 
   await progress(0.08, 'Le sable se met en place…');
   U.uNoise.value = makeNoiseTexture(256);
+  U.uCells.value = makeCellTexture(256);
   const terrain = createTerrain(SEED);
   const layout = createLayout(terrain);
   await progress(0.25, 'Les vagues se forment…');
@@ -72,9 +76,9 @@ async function boot(hot) {
   const { car, props, waves, water } = phys;
 
   // ---------- Lights
-  const hemi = new THREE.HemisphereLight(PALETTE.sky, PALETTE.groundBounce, 1.45);
+  const hemi = new THREE.HemisphereLight(PALETTE.sky, PALETTE.groundBounce, 1.15);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(PALETTE.sun, 3.0);
+  const sun = new THREE.DirectionalLight(PALETTE.sun, 4.3);
   sun.castShadow = true;
   sun.shadow.mapSize.set(quality.shadow, quality.shadow);
   const S = 34;
@@ -122,7 +126,7 @@ async function boot(hot) {
   const spawn = layout.spawn;
   car.reset(spawn.x, spawn.z, spawn.heading);
   const safe = { x: spawn.x, z: spawn.z, heading: spawn.heading, t: 0 };
-  const game = { mode: 'title', found: 0, total: shells.items.length, time: 0, deepTime: 0, ended: false };
+  const game = { mode: 'title', found: 0, total: shells.items.length, time: 0, playTime: 0, deepTime: 0, ended: false };
   if (hot && hot.found) {
     for (const id of hot.found) { const it = shells.items.find((s) => s.id === id); if (it) { it.taken = true; it.group.visible = false; game.found++; } }
   }
@@ -142,21 +146,11 @@ async function boot(hot) {
   };
   updateSoundIcon();
 
-  const input = createInput({ zone: $('zone'), stick: $('stick'), knob: $('knob'), buttons: { handbrake: $('hb'), horn: $('horn') } });
-  input.onFirstUse = () => { $('stickHint').style.opacity = '0'; $('stick').classList.remove('ghost'); };
+  const input = createInput({ zone: $('zone'), steerUI: $('steer'), knob: $('knob'), buttons: { reverse: $('rev'), horn: $('horn') } });
   const touchUI = !matchMedia('(hover: hover) and (pointer: fine)').matches;
   $('how').innerHTML = touchUI
-    ? 'Pouce gauche : conduire dans la direction voulue. <b>Dérapage</b> et <b>klaxon</b> à droite.'
+    ? 'Un pouce suffit : <b>pose-le</b> pour avancer, <b>glisse</b> pour tourner, <b>lâche</b> pour freiner.'
     : '<b>Flèches</b> ou <b>ZQSD / WASD</b> pour conduire · <b>Espace</b> frein à main · <b>K</b> klaxon';
-  // ghost stick position
-  const placeGhost = () => {
-    const st = $('stick'), h = $('stickHint');
-    const x = Math.max(96, window.innerWidth * 0.24), y = window.innerHeight - Math.max(160, window.innerHeight * 0.21);
-    st.style.left = `${x}px`; st.style.top = `${y}px`;
-    const hw = h.offsetWidth || 200;
-    h.style.left = `${Math.max(x, hw / 2 + 14)}px`; h.style.top = `${y}px`;
-  };
-  placeGhost();
 
   // ---------- UI
   const toast = (() => {
@@ -178,7 +172,10 @@ async function boot(hot) {
     game.mode = 'play';
     $('title').classList.add('gone');
     $('hud').classList.add('on');
-    if (touchUI) { $('stick').classList.add('ghost'); $('stickHint').style.opacity = '1'; }
+    if (touchUI) {
+      $('hint').classList.add('on');
+      input.onFirstUse = () => setTimeout(() => $('hint').classList.remove('on'), 2500);
+    }
     setTimeout(() => toast('Trouve les 12 coquillages', 'Suis les rayons dorés', 3200), 600);
     try { navigator.wakeLock?.request?.('screen').catch(() => {}); } catch (e) { /* optional */ }
   };
@@ -202,7 +199,7 @@ async function boot(hot) {
     }, 380);
   };
   $('btnReset').addEventListener('click', () => { audio.uiTap(); respawn(); });
-  $('endBtn').addEventListener('click', () => { $('end').classList.remove('on'); audio.uiTap(); });
+  $('endBtn').addEventListener('click', () => { $('end').classList.remove('on'); document.body.classList.remove('ended'); audio.uiTap(); });
 
   // ---------- Camera
   const cam = { yaw: spawn.heading, target: new THREE.Vector3(car.pos.x, car.pos.y, car.pos.z), shake: 0, snap: true, dist: 12 };
@@ -219,19 +216,23 @@ async function boot(hot) {
       camera.position.copy(tmpV);
       cam.target.set(car.pos.x, car.pos.y + (portrait ? 0.4 : 1.0), car.pos.z);
       camera.lookAt(cam.target);
+      scene.fog.near = 22; scene.fog.far = 190;
       return;
     }
-    const follow = car.forwardSpeed > -1.5 ? 1.7 : 0.35;
+    const follow = car.forwardSpeed > -1.5 ? 2.0 : 0.3;
     const k = 1 - Math.exp(-dt * follow * Math.min(1, 0.25 + sp / 6));
     cam.yaw += wrapAngle(carYaw - cam.yaw) * (cam.snap ? 1 : k);
-    const look = 1.8 + Math.min(sp, 20) * 0.16;
-    tmpV.set(car.pos.x + fx * look, car.pos.y + 0.5, car.pos.z + fz * look);
-    if (cam.snap) cam.target.copy(tmpV); else cam.target.lerp(tmpV, 1 - Math.exp(-dt * 6));
-    const dist = (portrait ? 12.5 : 11) + Math.min(sp, 20) * 0.12;
-    const hgt = (portrait ? 9.2 : 6.6) + Math.min(sp, 20) * 0.06;
+    const look = (portrait ? 7.5 : 1.0) + Math.min(sp, 20) * (portrait ? 0.32 : 0.18);
+    tmpV.set(car.pos.x + fx * look, Math.max(car.pos.y, -0.4) + 0.3, car.pos.z + fz * look);
+    if (cam.snap) cam.target.copy(tmpV); else cam.target.lerp(tmpV, 1 - Math.exp(-dt * 4));
+    const zoom = 1 + Math.min(sp, 20) * 0.012;
+    const dist = (portrait ? 21 : 14) * zoom;
+    const hgt = (portrait ? 33 : 27) * zoom;
     tmpV.set(cam.target.x - Math.sin(cam.yaw) * dist, cam.target.y + hgt, cam.target.z - Math.cos(cam.yaw) * dist);
     const gh = Math.max(terrain.heightAt(tmpV.x, tmpV.z), 0);
     if (tmpV.y < gh + 2.5) tmpV.y = gh + 2.5;
+    const cd = Math.hypot(dist, hgt);
+    scene.fog.near = cd * 1.02; scene.fog.far = cd + 150;
     if (cam.snap) camera.position.copy(tmpV); else camera.position.lerp(tmpV, 1 - Math.exp(-dt * 5));
     cam.snap = false;
     camera.lookAt(cam.target);
@@ -242,35 +243,13 @@ async function boot(hot) {
     }
   }
 
-  // ---------- Controls -> car
+  // ---------- Controls -> car (car-relative: no camera in the loop)
   function drive() {
     const inp = input.read();
-    if (game.mode !== 'play') { car.input.throttle = 0; car.input.steer = 0; car.input.handbrake = false; return inp; }
-    const carYaw = Math.atan2(car.R[2], car.R[8]);
-    if (inp.mode === 'dir') {
-      const m = Math.min(1, Math.hypot(inp.x, inp.y));
-      if (m < 0.12) { car.input.throttle = 0; car.input.steer = 0; }
-      else {
-        // camera-relative direction -> world yaw
-        const a = cam.yaw;
-        const dx = inp.y * Math.sin(a) - inp.x * Math.cos(a);
-        const dz = inp.y * Math.cos(a) + inp.x * Math.sin(a);
-        const want = Math.atan2(dx, dz);
-        const err = wrapAngle(want - carYaw);
-        const back = Math.abs(err) > 2.1 && car.forwardSpeed < 3.5;
-        if (back) {
-          const errB = wrapAngle(want + Math.PI - carYaw);
-          car.input.throttle = -m;
-          car.input.steer = Math.max(-1, Math.min(1, -errB * 1.8));
-        } else {
-          car.input.throttle = m * (0.55 + 0.45 * Math.max(0, Math.cos(err)));
-          car.input.steer = Math.max(-1, Math.min(1, err * 1.9));
-        }
-      }
-    } else {
-      car.input.throttle = inp.y;
-      car.input.steer = -inp.x; // left key = +steer (turn left)
-    }
+    if (game.mode !== 'play') { car.input.throttle = 0; car.input.steer = 0; car.input.brake = 0.6; car.input.handbrake = false; return inp; }
+    car.input.throttle = inp.throttle;
+    car.input.steer = inp.steer;
+    car.input.brake = inp.brake;
     car.input.handbrake = inp.handbrake;
     return inp;
   }
@@ -292,8 +271,8 @@ async function boot(hot) {
         tracks.add(i, w.contact.x, w.contact.y, w.contact.z, car.vel.x, car.vel.z, 0.34, str, phys.time);
       } else tracks.cut(i);
       if (wet > 0.02 && sp > 1.2) {
-        fx.sprayAcc += dt * sp * (1.2 + wet * 4);
-        while (fx.sprayAcc > 1) { fx.sprayAcc -= 1; particles.spray(w.contact.x, wl + 0.05, w.contact.z, car.vel.x, car.vel.z, Math.min(1, sp / 10)); }
+        fx.sprayAcc += dt * sp * (2.5 + Math.min(wet, 0.5) * 12);
+        while (fx.sprayAcc > 1) { fx.sprayAcc -= 1; particles.spray(w.contact.x, wl + 0.05, w.contact.z, car.vel.x, car.vel.z, Math.min(1, sp / 9)); }
       } else if (wet <= 0.02 && (w.surf === SURF.SAND || w.surf === SURF.WETSAND || w.surf === SURF.GRASS) && (sp > 4 || w.slip > 0.25)) {
         fx.dustAcc += dt * (sp * 0.5 + w.slip * 18) * (w.surf === SURF.WETSAND ? 0.35 : 1);
         while (fx.dustAcc > 1) { fx.dustAcc -= 1; particles.dust(w.contact.x, w.contact.y, w.contact.z, car.vel.x, car.vel.z, surfColor[w.surf]); }
@@ -350,7 +329,9 @@ async function boot(hot) {
         if (game.found < game.total) toast(`Coquillage ${game.found}/${game.total}`, ['Joli !', 'Encore un pour la collection', 'Il brillait sous le sable', 'La marée l\'avait gardé pour toi'][game.found % 4]);
         else {
           toast('Les douze !', '', 2400);
-          setTimeout(() => $('end').classList.add('on'), 1600);
+          const mins = Math.floor(game.playTime / 60), secs = Math.round(game.playTime % 60);
+          $('endTime').textContent = `Temps de balade : ${mins} min ${String(secs).padStart(2, '0')} s`;
+          setTimeout(() => { $('end').classList.add('on'); document.body.classList.add('ended'); }, 1600);
         }
         continue;
       }
@@ -359,8 +340,24 @@ async function boot(hot) {
     return { nearest, nd };
   }
 
+  // ---------- Off-screen pointer toward the nearest shell
+  const edgeP = new THREE.Vector3();
+  function updateEdge(nearest) {
+    const el = $('edge');
+    if (!nearest || game.mode !== 'play') { el.classList.remove('on'); return; }
+    edgeP.set(nearest.x, nearest.baseY + 1.5, nearest.z).project(camera);
+    const behind = edgeP.z > 1;
+    let x = behind ? -edgeP.x : edgeP.x, y = behind ? -edgeP.y : edgeP.y;
+    if (!behind && Math.abs(x) < 0.86 && y < 0.72 && y > -0.8) { el.classList.remove('on'); return; }
+    const m = Math.max(Math.abs(x) / 0.84, y > 0 ? y / 0.7 : -y / 0.62, 1e-4);
+    x /= m; y /= m;
+    const px = (x * 0.5 + 0.5) * window.innerWidth, py = (-y * 0.5 + 0.5) * window.innerHeight;
+    el.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) rotate(${Math.atan2(-y, x).toFixed(3)}rad)`;
+    el.classList.add('on');
+  }
+
   // ---------- Resize
-  window.addEventListener('resize', () => { applySize(); placeGhost(); });
+  window.addEventListener('resize', () => { applySize(); });
   applySize();
 
   await progress(0.95, 'En route…');
@@ -372,7 +369,8 @@ async function boot(hot) {
 
   // ---------- Loop
   let last = performance.now();
-  let hudT = 0, perfAcc = 0, perfN = 0, perfT = 0, hornWas = false;
+  let hudT = 0, perfAcc = 0, perfN = 0, perfT = 0, hornWas = false, fpsShown = 60;
+  $('speed').addEventListener('click', () => { $('perf').hidden = !$('perf').hidden; $('perf').textContent = '…'; });
   const frameTimes = [];
   window.__mb = { phys, car, game, camera, renderer, scene, start, quality, layout, terrain };
 
@@ -383,6 +381,7 @@ async function boot(hot) {
     if (!(dt > 0)) dt = 1 / 60;
     dt = Math.min(dt, 0.1);
     game.time += dt;
+    if (game.mode === 'play') game.playTime += dt;
 
     const inp = drive();
     if (inp.horn && !hornWas) birds.scare(car.pos.x, car.pos.z);
@@ -427,7 +426,7 @@ async function boot(hot) {
     updateCamera(dt);
     if (window.__mbCamHook) window.__mbCamHook(camera, car);
     // sun & shadow frustum follow the car
-    sun.target.position.set(car.pos.x, car.pos.y, car.pos.z);
+    sun.target.position.set(cam.target.x, car.pos.y, cam.target.z);
     sun.position.copy(sun.target.position).addScaledVector(U.uSunDir.value, 90);
     // snap shadow camera to texels to avoid shimmering
     const texel = (2 * S) / quality.shadow;
@@ -464,17 +463,25 @@ async function boot(hot) {
       } else $('compass').style.opacity = '0';
     }
 
+    updateEdge(nearest);
     renderer.render(scene, camera);
 
-    // adaptive resolution
-    if (!lockQuality) {
-      perfAcc += dt; perfN++; perfT += dt;
-      if (perfT > 2.5) {
-        const avg = perfAcc / perfN;
-        perfAcc = 0; perfN = 0; perfT = 0;
-        if (avg > 0.026 && renderScale > 0.6) { renderScale = Math.max(0.6, renderScale - 0.12); applySize(); }
-        else if (avg < 0.0145 && renderScale < 1) { renderScale = Math.min(1, renderScale + 0.08); applySize(); }
+    // adaptive resolution (rAF is capped at the display rate, so "fast" means at the cap)
+    perfAcc += dt; perfN++; perfT += dt; upCooldown -= dt;
+    if (perfT > 2) {
+      const avg = perfAcc / perfN;
+      perfAcc = 0; perfN = 0; perfT = 0;
+      fpsShown = 1 / avg;
+      if (!lockQuality) {
+        if (avg > 0.0215 && renderScale > 0.5) {
+          renderScale = Math.max(0.5, renderScale - (avg > 0.03 ? 0.15 : 0.08));
+          maxScale = Math.min(maxScale, renderScale + 0.08);
+          upCooldown = 10; applySize();
+        } else if (avg < 0.0178 && renderScale < maxScale - 0.001 && upCooldown <= 0) {
+          renderScale = Math.min(maxScale, renderScale + 0.05); upCooldown = 4; applySize();
+        }
       }
+      if (!$('perf').hidden) $('perf').textContent = `${Math.round(fpsShown)} i/s · ${renderer.getPixelRatio().toFixed(2)}x · ${tierName}`;
     }
     frameTimes.push(dt); if (frameTimes.length > 120) frameTimes.shift();
   }

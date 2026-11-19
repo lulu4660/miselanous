@@ -5,7 +5,7 @@ import { colorize, colorizeFn, place, merge, softBox, profileExtrude } from './g
 import { CAR } from '../vehicle.js';
 
 export const CAR_COLORS = {
-  body: '#f2755b', cabin: '#f8ecd6', trim: '#35303b', rim: '#f3e6cf', tyre: '#3a3540',
+  body: '#f2755b', cabin: '#f6ead6', trim: '#3b3442', rim: '#f3e6cf', tyre: '#4a4252',
   board: '#3dbdb7', boardStripe: '#ffcf5c', can: '#6f7e3f', bag: '#e6a83b', shock: '#ffc94d', glass: '#283544',
 };
 
@@ -24,7 +24,7 @@ function makeTyreGeo() {
     for (const side of [-1, 1]) {
       const kb = softBox(0.13, 0.05, 0.1, 0.015, 1);
       place(kb, { x: side * 0.09 + (k % 2 ? 0.02 : -0.02) * side, y: Math.cos(a) * (r + 0.012), z: Math.sin(a) * (r + 0.012), rx: -a });
-      colorize(kb, '#2e2a33');
+      colorize(kb, '#3b3442');
       parts.push(kb);
     }
   }
@@ -255,7 +255,7 @@ export function createCarModel() {
         W.damper.position.y = -L; W.damper.scale.set(1, L, 1);
       }
       // brake lights
-      const braking = (car.throttle < -0.05 && car.forwardSpeed > 0.5) || car.input.handbrake;
+      const braking = ((car.throttle < -0.05 || car.brake > 0.1) && car.forwardSpeed > 0.5) || car.input.handbrake;
       brakeMat.opacity += ((braking ? 0.9 : 0) - brakeMat.opacity) * Math.min(1, dt * 12);
       // antenna: driven by acceleration in body space
       if (dt > 0) {

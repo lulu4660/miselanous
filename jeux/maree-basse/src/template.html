@@ -10,8 +10,8 @@
   --ink: #2b2233;
   --cream: #fff4e2;
   --cream-dim: rgba(255, 244, 226, 0.78);
-  --glass: rgba(43, 34, 51, 0.34);
-  --glass-strong: rgba(43, 34, 51, 0.55);
+  --glass: rgba(38, 29, 46, 0.62);
+  --glass-strong: rgba(38, 29, 46, 0.82);
   --line: rgba(255, 244, 226, 0.22);
   --coral: #ff7b5c;
   --lagoon: #43c6b6;
@@ -55,7 +55,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 #hud { z-index: 20; opacity: 0; transition: opacity .6s ease .2s; }
 #hud.on { opacity: 1; }
 .chip { position: absolute; display: flex; align-items: center; gap: 8px; padding: 8px 13px 8px 10px; border-radius: 999px; background: var(--glass);
-  backdrop-filter: blur(10px) saturate(1.2); -webkit-backdrop-filter: blur(10px) saturate(1.2); border: 1px solid var(--line); font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+  border: 1px solid var(--line); font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
 #shells { top: calc(env(safe-area-inset-top, 0px) + 12px); left: calc(env(safe-area-inset-left, 0px) + 14px); }
 #shells svg { width: 22px; height: 22px; }
 #shells .of { color: var(--cream-dim); font-weight: 500; }
@@ -63,38 +63,49 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 #compass .arr { width: 20px; height: 20px; display: grid; place-items: center; transition: transform .15s linear; }
 #compass .arr svg { width: 16px; height: 16px; }
 .tr { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 12px); right: calc(env(safe-area-inset-right, 0px) + 14px); display: flex; gap: 8px; pointer-events: auto; }
-.icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--glass); display: grid; place-items: center; cursor: pointer; padding: 0; }
 .icon-btn svg { width: 22px; height: 22px; }
 .icon-btn:active { transform: scale(.94); }
-#speed { left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); font-size: 15px; padding: 6px 14px; gap: 6px; }
+#speed { left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); font-size: 15px; padding: 6px 14px; gap: 6px; pointer-events: auto; cursor: pointer; }
+#perf { font-size: 11px; font-weight: 600; color: var(--cream-dim); margin-left: 4px; }
 #speed b { font-size: 20px; min-width: 2ch; text-align: right; }
 #speed span { color: var(--cream-dim); font-weight: 500; font-size: 12px; }
 
-/* joystick zone */
-#zone { position: fixed; left: 0; bottom: 0; width: 62%; height: 72%; pointer-events: auto; touch-action: none; z-index: 19; }
-#stick { position: fixed; width: 132px; height: 132px; margin: -66px 0 0 -66px; border-radius: 50%; border: 2px solid rgba(255,244,226,.5); background: rgba(43,34,51,.16);
-  opacity: 0; transition: opacity .15s ease; pointer-events: none; z-index: 21; left: 25%; top: 78%; }
-#stick.on, #stick.ghost { opacity: 1; }
-#stick.ghost { opacity: .7; }
-#knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%; background: var(--cream); box-shadow: 0 4px 14px rgba(43,34,51,.35); }
-#stickHint { position: fixed; z-index: 21; font-size: 13px; font-weight: 600; color: var(--cream); text-shadow: 0 1px 8px rgba(43,34,51,.6); transform: translate(-50%, 84px); transition: opacity .4s ease; white-space: nowrap; }
-.pad { position: absolute; right: calc(env(safe-area-inset-right, 0px) + 18px); bottom: calc(env(safe-area-inset-bottom, 0px) + 26px); display: grid; gap: 14px; justify-items: end; pointer-events: auto; z-index: 22; }
-.round { width: 78px; height: 78px; border-radius: 50%; border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  display: grid; place-items: center; touch-action: none; cursor: pointer; padding: 0; transition: transform .08s ease, background .08s ease; }
+/* drive zone: the whole screen; one thumb = wheel + accelerator */
+#zone { position: fixed; inset: 0; pointer-events: auto; touch-action: none; z-index: 19; }
+#steer { position: fixed; width: 184px; height: 56px; margin: -28px 0 0 -92px; border-radius: 999px; background: rgba(38, 29, 46, .38); border: 1.5px solid rgba(255,244,226,.45);
+  opacity: 0; transition: opacity .12s ease; pointer-events: none; z-index: 21; }
+#steer.on { opacity: 1; }
+#steer::before, #steer::after { content: ""; position: absolute; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-top: 2px solid rgba(255,244,226,.6); border-left: 2px solid rgba(255,244,226,.6); }
+#steer::before { left: 14px; transform: rotate(-45deg); }
+#steer::after { right: 14px; transform: rotate(135deg); }
+#knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: var(--cream); box-shadow: 0 3px 10px rgba(43,34,51,.35); }
+#hint { position: fixed; z-index: 21; left: 50%; top: 40%; transform: translateX(-50%); width: min(86vw, 360px); text-align: center; pointer-events: none;
+  font-size: 15px; font-weight: 700; line-height: 1.35; color: var(--cream); text-shadow: 0 1px 2px rgba(43,34,51,.7), 0 2px 12px rgba(43,34,51,.6); transition: opacity .5s ease; opacity: 0; }
+#hint.on { opacity: 1; }
+#hint span { display: block; font-weight: 500; font-size: 13px; color: var(--cream); opacity: .9; }
+.pad { position: absolute; right: calc(env(safe-area-inset-right, 0px) + 16px); bottom: calc(env(safe-area-inset-bottom, 0px) + 70px); display: grid; gap: 12px; justify-items: end; pointer-events: auto; z-index: 22; }
+.round { width: 74px; height: 74px; border-radius: 50%; border: 1px solid var(--line); background: var(--glass);
+  display: grid; place-items: center; touch-action: none; cursor: pointer; padding: 0; transition: transform .08s ease, background .08s ease; user-select: none; -webkit-user-select: none; }
 .round svg { width: 34px; height: 34px; }
 .round small { display: block; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-top: -2px; color: var(--cream-dim); }
 .round .in { display: grid; justify-items: center; gap: 2px; }
 .round.down { transform: scale(.92); background: var(--glass-strong); }
-#horn { width: 64px; height: 64px; }
-#horn svg { width: 28px; height: 28px; }
-@media (hover: hover) and (pointer: fine) { .pad, #zone, #stick, #stickHint { display: none; } }
+#horn { width: 58px; height: 58px; }
+#horn svg { width: 22px; height: 22px; }
+#horn small { font-size: 10.5px; }
+@media (hover: hover) and (pointer: fine) { .pad, #zone, #steer { display: none; } }
 
 /* toast */
-#toast { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 22%); transform: translate(-50%, 10px); text-align: center; opacity: 0; transition: opacity .35s ease, transform .35s ease; width: min(90vw, 520px); }
+#toast { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 15%); transform: translate(-50%, 10px); text-align: center; opacity: 0; transition: opacity .35s ease, transform .35s ease; width: min(90vw, 520px); }
 #toast.on { opacity: 1; transform: translate(-50%, 0); }
 #toast .big { font-family: var(--font-display); font-size: clamp(30px, 8vw, 46px); line-height: 1.05; text-shadow: 0 3px 0 rgba(209, 92, 70, .6), 0 10px 30px rgba(43,34,51,.35); text-wrap: balance; }
 #toast .small { margin-top: 6px; font-size: 15px; font-weight: 600; text-shadow: 0 1px 10px rgba(43,34,51,.55); }
 
+#edge { position: fixed; left: 0; top: 0; width: 40px; height: 40px; margin: -20px 0 0 -20px; z-index: 18; pointer-events: none; opacity: 0; transition: opacity .25s ease; }
+#edge.on { opacity: 1; }
+#edge svg { width: 40px; height: 40px; filter: drop-shadow(0 2px 4px rgba(43,34,51,.5)); }
+body.ended .pad, body.ended #speed, body.ended #compass, body.ended #edge, body.ended #zone { display: none; }
 #fade { background: #fff4e2; opacity: 0; transition: opacity .35s ease; z-index: 40; }
 #fade.on { opacity: 1; }
 #vignette { z-index: 10; background: radial-gradient(130% 100% at 50% 45%, rgba(0,0,0,0) 55%, rgba(60, 30, 70, .28) 100%); }
@@ -102,7 +113,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 /* end card */
 #end { z-index: 32; display: grid; place-items: center; pointer-events: none; opacity: 0; transition: opacity .6s ease; }
 #end.on { opacity: 1; pointer-events: auto; }
-#end .card { text-align: center; padding: 26px 26px 22px; margin-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); border-radius: 28px; background: var(--glass-strong); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--line); max-width: 420px; }
+#end .card { text-align: center; padding: 26px 26px 22px; margin-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); border-radius: 28px; background: var(--glass-strong); border: 1px solid var(--line); max-width: 420px; }
 #end h2 { font-family: var(--font-display); font-weight: 400; font-size: clamp(34px, 9vw, 48px); margin: 0; line-height: 1; text-shadow: 0 3px 0 rgba(209, 92, 70, .6); }
 #end p { margin: 12px 0 18px; font-size: 15px; line-height: 1.5; color: var(--cream-dim); }
 #end button { border: 0; padding: 13px 22px; border-radius: 999px; background: var(--cream); color: var(--ink); font-weight: 800; font-size: 16px; cursor: pointer; }
@@ -114,12 +125,13 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 #err p { color: var(--cream-dim); line-height: 1.5; font-size: 15px; margin: 0 0 10px; }
 #err code { display: block; font-size: 12px; opacity: .7; word-break: break-word; margin-top: 12px; }
 @media (max-height: 520px) {
+  #speed { left: calc(env(safe-area-inset-left, 0px) + 14px); transform: none; }
   #title { padding-top: calc(env(safe-area-inset-top, 0px) + 4vh); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4vh); }
   #title .tag { font-size: 15px; margin-top: 8px; max-width: 46ch; }
   #title .how { margin-top: 10px; }
   #play { padding: 12px 24px 13px; font-size: 16px; }
   .round { width: 66px; height: 66px; } #horn { width: 56px; height: 56px; }
-  #toast { top: calc(env(safe-area-inset-top, 0px) + 14%); }
+  #toast { top: calc(env(safe-area-inset-top, 0px) + 18%); }
 }
 @media (prefers-reduced-motion: reduce) { #title, #toast, #hud, #fade, #end { transition: none; } }
 </style>
@@ -144,21 +156,25 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
       <svg id="icoSound" viewBox="0 0 24 24" fill="none" stroke="#fff4e2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4Z" fill="#fff4e2"/><path id="wave1" d="M15.5 9a4 4 0 0 1 0 6"/><path id="wave2" d="M18 6.5a7.5 7.5 0 0 1 0 11"/><path id="mute" d="M16 9.5l5 5M21 9.5l-5 5" style="display:none"/></svg>
     </button>
   </div>
-  <div id="speed" class="chip"><b id="kmh">0</b><span>km/h</span></div>
+  <div id="speed" class="chip" title="Touchez pour afficher les performances"><b id="kmh">0</b><span>km/h</span><span id="perf" hidden></span></div>
   <div id="toast"><div class="big" id="toastBig"></div><div class="small" id="toastSmall"></div></div>
 </div>
 
+<div id="edge" aria-hidden="true"><svg viewBox="0 0 40 40"><path d="M12 8 30 20 12 32 17 20Z" fill="#ffc94a" stroke="#6b4a1a" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
 <div id="zone" aria-hidden="true"></div>
-<div id="stick" class="ghost"><div id="knob"></div></div>
-<div id="stickHint">Glisse ton pouce pour conduire</div>
+<div id="steer"><div id="knob"></div></div>
+<div id="hint">Pose ton pouce pour avancer<span>Glisse-le à gauche ou à droite pour tourner, lâche pour freiner</span></div>
 <div class="pad" id="pad">
   <button class="round" id="horn" type="button" aria-label="Klaxon">
-    <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M6 13h5l9-6v18l-9-6H6Z" fill="#fff4e2"/><path d="M24 11.5c1.5 1.2 2.3 2.8 2.3 4.5s-.8 3.3-2.3 4.5" stroke="#fff4e2" stroke-width="2.2" stroke-linecap="round"/></svg>
-  </button>
-  <button class="round" id="hb" type="button" aria-label="Frein à main">
     <span class="in">
-      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="9.5" stroke="#fff4e2" stroke-width="2.4"/><circle cx="16" cy="16" r="3.2" fill="#fff4e2"/><path d="M3.5 10.5c-1.6 3.6-1.6 7.4 0 11M28.5 10.5c1.6 3.6 1.6 7.4 0 11" stroke="#ff7b5c" stroke-width="2.4" stroke-linecap="round"/></svg>
-      <small>Dérapage</small>
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 14.5h7.5c2.2 0 4.3-.9 6-2.4L25 7v18l-6.5-5.1c-1.7-1.5-3.8-2.4-6-2.4H5Z" fill="#fff4e2"/><rect x="3" y="13" width="3" height="6" rx="1.2" fill="#fff4e2"/></svg>
+      <small>Pouet</small>
+    </span>
+  </button>
+  <button class="round" id="rev" type="button" aria-label="Marche arrière">
+    <span class="in">
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 7v16M9 16l7 7 7-7" stroke="#fff4e2" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <small>Recul</small>
     </span>
   </button>
 </div>
@@ -178,6 +194,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   <div class="card">
     <h2 id="endTitle">Lagon complet</h2>
     <p id="endText">Les douze coquillages sont à toi. Le soleil reste encore un peu, la plage aussi.</p>
+    <p id="endTime" style="margin-top:-8px"></p>
     <button id="endBtn" type="button">Continuer à rouler</button>
   </div>
 </div>

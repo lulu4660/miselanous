@@ -9,13 +9,14 @@ const scenario = process.argv[3] || 'title';
 const W = +(process.argv[4] || 393), H = +(process.argv[5] || 852);
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1, hasTouch: scenario.includes('touch'), isMobile: scenario.includes('touch') });
+const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1, hasTouch: scenario.includes('touch') || scenario.includes('controls'), isMobile: scenario.includes('touch') || scenario.includes('controls') });
 const logs = [];
 page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
 const threeSrc = readFileSync(resolve('node_modules/three/build/three.module.min.js'));
 await page.route(/cdn\.jsdelivr\.net\/npm\/three@/, (r) => r.fulfill({ body: threeSrc, contentType: 'application/javascript' }));
-const url = 'file://' + resolve('dist/play.html') + '?q=medium&shot' + (scenario === 'title' ? '' : '&autoplay');
+const page_ = process.env.PAGE || 'dist/play.html';
+const url = 'file://' + resolve(page_) + '?q=medium&shot' + (scenario === 'title' ? '' : '&autoplay');
 const t0 = Date.now();
 await page.goto(url);
 await page.waitForFunction(() => window.__mbBooted || document.getElementById('err')?.classList.contains('on'), null, { timeout: 120000 });
@@ -79,6 +80,84 @@ else if (scenario.startsWith('beam')) {
   await wait(2500); await snap('beam_far');
   await page.evaluate(() => { const mb = window.__mb, s = mb.layout.shells[3]; mb.car.reset(s.x, s.z - 9, 0); });
   await wait(1500); await snap('beam_near');
+}
+else if (scenario.startsWith('controls')) {
+  // Real pointer path: CDP multi-touch through input.js -> drive() -> vehicle.
+  const cdp = await page.context().newCDPSession(page);
+  const T = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+  const st = () => page.evaluate(() => { const c = window.__mb.car; return { v: +c.forwardSpeed.toFixed(2), yaw: +Math.atan2(c.R[2], c.R[8]).toFixed(3), steer: +c.input.steer.toFixed(2), thr: c.input.throttle, brake: c.input.brake }; });
+  const ok = (cond, msg) => console.log((cond ? 'PASS ' : 'FAIL ') + msg);
+  // headless SwiftShader renders slower than real time, so wait in *simulation* seconds
+  const simWait = async (sec) => { const t0 = await page.evaluate(() => window.__mb.phys.time); await page.waitForFunction((t) => window.__mb.phys.time >= t, t0 + sec, { timeout: 120000, polling: 50 }); };
+  // put the car on a long, dry, flat stretch facing along it
+  const spot = await page.evaluate(() => {
+    const mb = window.__mb, t = mb.terrain;
+    let sd = 12345; const R = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+    for (let k = 0; k < 20000; k++) {
+      const x = (R() - 0.5) * 220, z = (R() - 0.5) * 220, a = R() * 6.28;
+      let ok = true;
+      for (let d = -5; d <= 60; d += 2) { const h = t.heightAt(x + Math.sin(a) * d, z + Math.cos(a) * d); if (h < 0.5 || h > 2.2 || t.mesaAt(x + Math.sin(a) * d, z + Math.cos(a) * d) > 0.05) { ok = false; break; } }
+      if (ok) return { x, z, a };
+    }
+    return { x: mb.layout.spawn.x, z: mb.layout.spawn.z, a: mb.layout.spawn.heading };
+  });
+  console.log('test strip', JSON.stringify(spot));
+  const resetSpot = () => page.evaluate((s) => { const mb = window.__mb; mb.car.reset(s.x, s.z, s.a); for (const o of mb.phys.obstacles) if (Math.hypot(o.x - s.x, o.z - s.z) < 70) o.y1 = -99; }, spot);
+  await resetSpot();
+  await simWait(1.2);
+  const X = 200, Y = 640;
+  await T('touchStart', [{ x: X, y: Y, id: 1 }]);
+  await simWait(2.2);
+  let a = await st(); console.log('hold straight', JSON.stringify(a));
+  ok(a.v > 5 && Math.abs(a.steer) < 0.05, 'thumb down drives forward straight');
+  await snap('ctl_drive');
+  for (let k = 1; k <= 6; k++) { await T('touchMove', [{ x: X + k * 12, y: Y, id: 1 }]); }
+  await simWait(1.0);
+  const b = await st(); console.log('slide right', JSON.stringify(b));
+  ok(b.steer < -0.5 && Math.atan2(Math.sin(b.yaw - a.yaw), Math.cos(b.yaw - a.yaw)) < -0.2, 'slide right turns right');
+  await T('touchMove', [{ x: X, y: Y, id: 1 }]); await simWait(1.6);
+  const c1 = await st(); await simWait(0.8); const c2 = await st();
+  console.log('back to centre', JSON.stringify(c1), JSON.stringify(c2));
+  ok(c1.steer === 0 && c2.steer === 0 && c2.thr === 1, 'thumb back on its landing point gives exactly zero steering (straight-line hold is asserted in the Node physics test)');
+  // reverse while the thumb stays down (multi-touch)
+  const rb = await page.locator('#rev').boundingBox();
+  await T('touchEnd', []); await resetSpot(); await simWait(0.6);
+  await T('touchStart', [{ x: X, y: Y, id: 1 }]); await simWait(1.5);
+  await T('touchStart', [{ x: X, y: Y, id: 1 }, { x: rb.x + rb.width / 2, y: rb.y + rb.height / 2, id: 2 }]);
+  await simWait(3.2);
+  const d = await st(); console.log('reverse held', JSON.stringify(d));
+  const dragAlive = await page.evaluate(() => document.getElementById('steer').classList.contains('on'));
+  ok(d.v < -0.5, 'reverse button brakes then reverses');
+  ok(dragAlive, 'steering thumb survives the second finger');
+  await T('touchEnd', [{ x: X, y: Y, id: 1 }]);
+  await simWait(0.2);
+  await T('touchEnd', []);
+  // speed up again then lift
+  await resetSpot();
+  await simWait(0.6);
+  await T('touchStart', [{ x: X, y: Y, id: 3 }]); await simWait(2.5);
+  const e0 = await st();
+  await T('touchEnd', []);
+  await simWait(3.0);
+  const e1 = await st(); console.log('lift', JSON.stringify(e0), '->', JSON.stringify(e1));
+  ok(Math.abs(e1.v) < 1.0, 'lifting the thumb stops the car within 3 s (from ' + e0.v + ' m/s)');
+  await snap('ctl_after');
+}
+else if (scenario.startsWith('perf')) {
+  // fixed-quality perf proxy: frame ms under SwiftShader, JS ms per frame, tris & calls
+  await drive(1, 0.15); await wait(2000);
+  const r = await page.evaluate(() => new Promise((res) => {
+    const mb = window.__mb; const R = mb.renderer;
+    let js = 0, nJs = 0; const origR = R.render.bind(R);
+    let tris = 0, calls = 0, n = 0;
+    R.render = (s, c) => { const t0 = performance.now(); origR(s, c); js += 0; tris += R.info.render.triangles; calls += R.info.render.calls; n++; };
+    const origU = mb.phys.update; mb.phys.update = (dt) => { const t0 = performance.now(); const k = origU(dt); js += performance.now() - t0; nJs++; return k; };
+    const times = []; let last = performance.now();
+    const tick = (now) => { times.push(now - last); last = now; if (times.length < 90) requestAnimationFrame(tick); else res({ frameMs: times.slice(10).reduce((a, b) => a + b, 0) / (times.length - 10), physMs: js / Math.max(1, nJs), tris: Math.round(tris / n), calls: Math.round(calls / n) }); };
+    requestAnimationFrame(tick);
+  }));
+  console.log('PERF', JSON.stringify(r));
+  await snap('perf');
 }
 else if (scenario.startsWith('jump')) {
   await page.evaluate(() => {

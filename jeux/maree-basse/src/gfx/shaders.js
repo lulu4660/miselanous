@@ -2,24 +2,25 @@
 import * as THREE from 'three';
 
 export const PALETTE = {
-  sun: new THREE.Color('#ffd6a0'),
-  sky: new THREE.Color('#a7a8ee'),
-  groundBounce: new THREE.Color('#d69a78'),
-  fog: new THREE.Color('#cdb4d6'),
+  sun: new THREE.Color('#ffe2bc'),
+  sky: new THREE.Color('#a3b1f0'),
+  groundBounce: new THREE.Color('#ead3ae'),
+  fog: new THREE.Color('#efc6b8'),
   horizon: new THREE.Color('#f6c9a6'),
   zenith: new THREE.Color('#7f8fd8'),
-  shallow: new THREE.Color('#62dcc8'),
-  lagoon: new THREE.Color('#14a2b4'),
-  deep: new THREE.Color('#1a5aa0'),
-  abyss: new THREE.Color('#252f6b'),
+  shallow: new THREE.Color('#5fd6cf'),
+  lagoon: new THREE.Color('#2cc3c9'),
+  deep: new THREE.Color('#1679a6'),
+  abyss: new THREE.Color('#24427a'),
   foam: new THREE.Color('#fffaf0'),
-  underwater: new THREE.Color('#1f9fae'),
+  underwater: new THREE.Color('#2bb3bd'),
 };
 
 // Global uniforms shared (by reference) by every patched material.
 export const U = {
   uTime: { value: 0 },
   uNoise: { value: null },
+  uCells: { value: null },
   uSunDir: { value: new THREE.Vector3(-0.45, 0.42, 0.79).normalize() },
   uSunColor: { value: PALETTE.sun.clone() },
   uCarPos: { value: new THREE.Vector3() },
@@ -67,9 +68,56 @@ export function makeNoiseTexture(size = 256, seed = 3) {
   return tex;
 }
 
+// Tileable cellular (Voronoi) distance fields, baked once instead of evaluated per pixel.
+// R,G: F2-F1 edge distance of two cell layers (for crisp foam lace), B: caustic brightness, A: F1.
+export function makeCellTexture(size = 256, seed = 11) {
+  const data = new Uint8Array(size * size * 4);
+  const layer = (cells, sd) => {
+    const pts = [];
+    let s = sd * 9301 + 49297;
+    const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+    for (let j = 0; j < cells; j++) for (let i = 0; i < cells; i++) pts.push([i + 0.12 + rnd() * 0.76, j + 0.12 + rnd() * 0.76]);
+    const out = new Float32Array(size * size * 2);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const px = (x + 0.5) / size * cells, py = (y + 0.5) / size * cells;
+      const ci = Math.floor(px), cj = Math.floor(py);
+      let f1 = 9, f2 = 9;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+        const ii = ci + di, jj = cj + dj;
+        const wi = ((ii % cells) + cells) % cells, wj = ((jj % cells) + cells) % cells;
+        const p = pts[wj * cells + wi];
+        const qx = p[0] + (ii - wi), qy = p[1] + (jj - wj);
+        const d = Math.hypot(px - qx, py - qy);
+        if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) f2 = d;
+      }
+      out[(y * size + x) * 2] = f2 - f1;
+      out[(y * size + x) * 2 + 1] = f1;
+    }
+    return out;
+  };
+  const A = layer(8, seed), B = layer(6, seed + 7), C = layer(5, seed + 3);
+  for (let k = 0; k < size * size; k++) {
+    const o = k * 4;
+    data[o] = Math.min(255, Math.round(A[k * 2] / 0.6 * 255));
+    data[o + 1] = Math.min(255, Math.round(B[k * 2] / 0.6 * 255));
+    const e = C[k * 2];
+    const c = Math.pow(Math.max(0, 1 - e / 0.32), 2.2) * 0.8 + Math.pow(Math.min(1, C[k * 2 + 1] / 0.7), 3) * 0.2;
+    data[o + 2] = Math.round(Math.min(1, c) * 255);
+    data[o + 3] = Math.min(255, Math.round(A[k * 2 + 1] / 0.8 * 255));
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 export const GLSL_COMMON = /* glsl */`
 uniform float uTime;
 uniform sampler2D uNoise;
+uniform sampler2D uCells;
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform vec3 uCarPos;
@@ -85,31 +133,13 @@ float mbBayer(vec2 p) {
   return (B[k] + 0.5) / 16.0;
 }
 
-vec2 mbHash2(vec2 p) {
-  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
-  return fract(sin(p) * 43758.5453);
-}
-// Voronoi: returns (F1, F2) distances. Animated feature points.
-vec2 mbVoronoi(vec2 p, float t) {
-  vec2 ip = floor(p), fp = fract(p);
-  float f1 = 8.0, f2 = 8.0;
-  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-    vec2 g = vec2(float(i), float(j));
-    vec2 o = mbHash2(ip + g);
-    o = 0.5 + 0.42 * sin(t + 6.2831 * o);
-    float d = length(g + o - fp);
-    if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) { f2 = d; }
-  }
-  return vec2(f1, f2);
-}
 float mbNoise(vec2 p) { return texture2D(uNoise, p).r; }
+// cheap caustics: two scrolling octaves of a baked cell pattern, multiplied
 float mbCaustic(vec2 p, float t) {
-  vec2 w = vec2(texture2D(uNoise, p * 0.021 + t * 0.006).g, texture2D(uNoise, p * 0.021 - t * 0.005 + 0.37).b) - 0.5;
-  vec2 v1 = mbVoronoi(p * 0.55 + w * 1.6, t * 0.9);
-  vec2 v2 = mbVoronoi(p * 0.42 - w * 1.2 + 3.7, t * 0.7 + 1.3);
-  float c1 = 1.0 - smoothstep(0.0, 0.18, v1.y - v1.x);
-  float c2 = 1.0 - smoothstep(0.0, 0.22, v2.y - v2.x);
-  return c1 * 0.65 + c2 * 0.5;
+  vec2 w = (texture2D(uNoise, p * 0.02 + t * 0.004).rg - 0.5) * 0.5;
+  float a = texture2D(uCells, p * 0.105 + w + vec2(t * 0.011, t * 0.006)).b;
+  float b = texture2D(uCells, p * 0.27 - w * 0.6 + vec2(-t * 0.009, t * 0.014)).b;
+  return a * (0.35 + b) * 1.4;
 }
 float mbCloud(vec2 xz) {
   vec2 uv = xz * 0.0028 + uWind * uTime * 0.0016;
@@ -122,7 +152,7 @@ float mbCloud(vec2 xz) {
 // optional car push (grass), cloud shadows, underwater tint + caustics, wet sand line.
 export function patchMaterial(mat, opts = {}) {
   const o = {
-    world: true, clouds: true, underwater: true, caustics: true, wetline: false,
+    world: true, clouds: true, underwater: true, caustics: false, wetline: false,
     wind: 0, push: 0, detail: 0, ...opts,
   };
   mat.onBeforeCompile = (shader) => {
@@ -140,8 +170,8 @@ export function patchMaterial(mat, opts = {}) {
         vec3 wp0 = (modelMatrix * vec4(ipos, 1.0)).xyz;
         float hgt = max(0.0, transformed.y) * aSway;
         float ph = dot(wp0.xz, vec2(0.21, 0.17));
-        float gust = texture2D(uNoise, wp0.xz * 0.006 + uWind * uTime * 0.012).r;
-        vec2 sway = uWind * (sin(uTime * 1.9 + ph) * 0.5 + 0.5 + gust * 1.4) * ${(+o.wind).toFixed(3)} * hgt * hgt;
+        float gust = sin(uTime * 0.37 + wp0.x * 0.013) * sin(uTime * 0.23 + wp0.z * 0.011) * 0.5 + 0.5;
+        vec2 sway = uWind * (sin(uTime * 1.9 + ph) * 0.5 + 0.5 + gust * 1.4) * ${(+o.wind).toFixed(4)} * hgt * hgt;
         ${o.push ? `
         vec2 dc = wp0.xz - uCarPos.xz;
         float dd = length(dc);
@@ -189,7 +219,7 @@ export function patchMaterial(mat, opts = {}) {
       {
         float gn = texture2D(uNoise, vMbWorld.xz * 0.35).a;
         float gn2 = texture2D(uNoise, vMbWorld.xz * 0.045).g;
-        diffuseColor.rgb *= 0.9 + gn * 0.16 + (gn2 - 0.5) * 0.12;
+        diffuseColor.rgb *= 0.95 + gn * 0.07 + (gn2 - 0.5) * 0.1;
       }` : ''}
       ${o.wetline ? `
       {
@@ -212,8 +242,8 @@ export function patchMaterial(mat, opts = {}) {
         float dpt = uWaterLevel - vMbWorld.y;
         if (dpt > 0.0) {
           float c = mbCaustic(vMbWorld.xz, uTime);
-          float fade = smoothstep(0.0, 0.25, dpt) * exp(-dpt * 0.55);
-          reflectedLight.directDiffuse += diffuseColor.rgb * uSunColor * c * fade * 1.35 * mbCloud(vMbWorld.xz);
+          float fade = smoothstep(0.0, 0.2, dpt) * (1.0 - smoothstep(0.4, 1.6, dpt)) * (1.0 - smoothstep(25.0, 45.0, length(vMbWorld - cameraPosition)));
+          reflectedLight.directDiffuse += vec3(0.91, 1.0, 0.96) * uSunColor * c * fade * 0.5;
         }
       }` : ''}
       `);

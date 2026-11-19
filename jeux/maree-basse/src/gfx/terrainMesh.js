@@ -8,7 +8,7 @@ const COLORS = {
   sandDry: C('#f2dcae'), sandAlt: C('#e9c994'), sandPink: C('#efcfa2'),
   wet: C('#cfae86'), under: C('#dcc59c'),
   grassA: C('#bea457'), grassB: C('#a9a253'), grassC: C('#c9a95e'),
-  mesaTop: C('#b7a15e'),
+  mesaTop: C('#d9b383'),
 };
 
 export function createTerrainMesh(terrain, { chunks = 8 } = {}) {
@@ -47,10 +47,10 @@ export function createTerrainMesh(terrain, { chunks = 8 } = {}) {
         tmp.lerp(gc, Math.min(1, gr * 1.3));
       }
       // rock: steep or mesa
-      const steep = Math.max(0, Math.min(1, (0.86 - ny) / 0.18));
+      const steep = Math.max(0, Math.min(1, (0.8 - ny) / 0.2));
       const m = mesa[k];
-      const rk = 1 - Math.max(0, Math.min(1, (ny - 0.8) / 0.12));
-      let r = Math.max(steep, m > 0.25 ? rk : 0);
+      const rk = 1 - Math.max(0, Math.min(1, (ny - 0.62) / 0.16));
+      let r = Math.max(steep * 0.9, m > 0.25 ? rk : 0);
       if (m > 0.5 && ny > 0.86 && h > 1.5) tmp.copy(COLORS.mesaTop).lerp(COLORS.grassC, n1 * 0.5).lerp(COLORS.sandAlt, n2 * 0.35);
       rock[k] = r;
       colors[k * 3] = tmp.r; colors[k * 3 + 1] = tmp.g; colors[k * 3 + 2] = tmp.b;
@@ -59,7 +59,7 @@ export function createTerrainMesh(terrain, { chunks = 8 } = {}) {
 
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   patchMaterial(mat, {
-    wetline: true, detail: 1, cutout: 2,
+    wetline: true, detail: 1, cutout: 2, caustics: true,
     extraVert: (s) => s
       .replace('#include <common>', '#include <common>\nattribute float aRock;\nvarying float vRock;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRock = aRock;'),
@@ -68,22 +68,22 @@ export function createTerrainMesh(terrain, { chunks = 8 } = {}) {
       .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
       if (vRock > 0.35) {
         vec3 fN = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
-        normal = normalize(mix(normal, fN, smoothstep(0.35, 0.8, vRock) * 0.85));
+        normal = normalize(mix(normal, fN, smoothstep(0.35, 0.8, vRock) * 0.45));
       }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
       if (vRock > 0.02) {
-        float nn = texture2D(uNoise, vMbWorld.xz * 0.018).r;
-        float band = vMbWorld.y * 1.45 + nn * 1.6 + texture2D(uNoise, vMbWorld.xz * 0.11).b * 0.35;
-        float id = floor(band);
-        float f = fract(band);
-        float m4 = mod(id, 4.0);
-        vec3 c = m4 < 1.0 ? vec3(0.84, 0.58, 0.44) : m4 < 2.0 ? vec3(0.72, 0.47, 0.40) : m4 < 3.0 ? vec3(0.90, 0.70, 0.52) : vec3(0.64, 0.43, 0.42);
-        float streak = texture2D(uNoise, vec2(dot(vMbWorld.xz, vec2(0.7, 0.7)) * 0.35, vMbWorld.y * 0.02)).g;
-        c *= 0.86 + 0.22 * streak;
-        c *= 0.93 + 0.12 * texture2D(uNoise, vMbWorld.xz * 0.6 + vMbWorld.y * 0.3).a;
-        c *= mix(0.8, 1.0, smoothstep(0.0, 0.07, f));      // dark seam between strata
-        c = mix(c, c * vec3(1.05, 0.98, 0.9), smoothstep(0.75, 1.0, f));
-        diffuseColor.rgb = mix(diffuseColor.rgb, c, smoothstep(0.0, 0.6, vRock));
+        // sandstone strata: low frequency, uneven thickness, 5 tones
+        float nn = texture2D(uNoise, vMbWorld.xz * 0.015).r;
+        float yy = vMbWorld.y * 0.42 + nn * 1.1 + texture2D(uNoise, vMbWorld.xz * 0.09).b * 0.18;
+        float warpY = yy + 0.35 * sin(yy * 2.7 + nn * 4.0);
+        float id = floor(warpY);
+        float f = fract(warpY);
+        float m5 = mod(id, 5.0);
+        vec3 c = m5 < 1.0 ? vec3(0.78, 0.41, 0.25) : m5 < 2.0 ? vec3(0.89, 0.64, 0.45) : m5 < 3.0 ? vec3(0.66, 0.31, 0.23) : m5 < 4.0 ? vec3(0.95, 0.83, 0.65) : vec3(0.73, 0.48, 0.36);
+        float streak = texture2D(uNoise, vec2(dot(vMbWorld.xz, vec2(0.7, 0.7)) * 0.3, vMbWorld.y * 0.015)).g;
+        c *= 0.9 + 0.16 * streak;
+        c *= mix(0.86, 1.0, smoothstep(0.0, 0.06, f));
+        diffuseColor.rgb = mix(diffuseColor.rgb, c, smoothstep(0.15, 0.7, vRock));
       }`),
   });
 

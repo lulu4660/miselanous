@@ -78,7 +78,7 @@ function crateGeo() {
 }
 
 export function createPropMeshes(props, scene) {
-  const mat = patchMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.48 }), { caustics: true });
+  const mat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true }), {});
   const groups = new Map(); // key -> { mesh, items }
   const geoFor = (kind, color) => {
     switch (kind) {
@@ -207,8 +207,17 @@ export function createStructures(terrain, layout) {
     const sc = SCHEMES[u.color % 4];
     const parts = [];
     const pole = new THREE.CylinderGeometry(0.035, 0.035, 2.3, 6); place(pole, { y: 1.15 }); colorize(pole, '#efe2c8'); parts.push(pole);
-    const can = new THREE.ConeGeometry(1.25, 0.55, 12, 1, true); place(can, { y: 2.2 });
-    colorizeFn(can, (x, y, z) => (Math.floor(((Math.atan2(z, x) + Math.PI) / (Math.PI * 2)) * 12) % 2 ? sc[0] : sc[1])); parts.push(can);
+    const can = new THREE.ConeGeometry(1.25, 0.55, 16, 1, true).toNonIndexed(); place(can, { y: 2.2 });
+    { // flat stripes: colour each triangle by its own angle
+      const p = can.attributes.position, cols = new Float32Array(p.count * 3), c = new THREE.Color();
+      for (let i = 0; i < p.count; i += 3) {
+        const cx = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, cz = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3;
+        c.set(Math.floor(((Math.atan2(cz, cx) + Math.PI) / (Math.PI * 2)) * 16) % 2 ? sc[0] : sc[1]);
+        for (let k = 0; k < 3; k++) { cols[(i + k) * 3] = c.r; cols[(i + k) * 3 + 1] = c.g; cols[(i + k) * 3 + 2] = c.b; }
+      }
+      can.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    }
+    parts.push(can);
     const towel = softBox(0.9, 0.03, 1.8, 0.01, 1); place(towel, { x: 0.7, y: 0.03, z: 0.4, ry: 0.4 });
     colorizeFn(towel, (x, y, z) => (Math.floor((z + 2) * 4) % 2 ? sc[2] : '#fff6e8')); parts.push(towel);
     const m = W(merge(parts));
@@ -270,6 +279,22 @@ function rampMesh(r, W, kicker = false) {
     parts.push(g);
   }
   if (kicker) {
+    // red / cream striped lip and two little flags
+    for (let k = 0; k < 6; k++) {
+      const st = softBox(r.hw * 2 / 6 - 0.02, 0.1, 0.45, 0.02, 1);
+      place(st, { x: -r.hw + (k + 0.5) * (r.hw * 2 / 6), y: r.y1 - 0.02, z: r.hl - 0.22, rx: -slope });
+      colorize(st, k % 2 ? '#fff1dc' : '#e8573f');
+      parts.push(st);
+    }
+    for (const s of [-1, 1]) {
+      const pole = new THREE.CylinderGeometry(0.035, 0.035, 1.6, 6); place(pole, { x: s * (r.hw + 0.1), y: r.y1 + 0.75, z: r.hl - 0.1 }); colorize(pole, '#3a3540'); parts.push(pole);
+      const fl = new THREE.BufferGeometry();
+      fl.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, -0.34, 0, 0, -0.17, -0.55], 3));
+      fl.computeVertexNormals();
+      place(fl, { x: s * (r.hw + 0.1), y: r.y1 + 1.52, z: r.hl - 0.1 });
+      colorize(fl, s > 0 ? '#ffc94a' : '#43c6b6');
+      parts.push(fl);
+    }
     // painted chevrons
     for (let i = 0; i < 3; i++) {
       const t = 0.35 + i * 0.2;
@@ -319,7 +344,7 @@ export function createShells(layout, terrain) {
   const geo = scallopGeo();
   const mat = new THREE.MeshStandardMaterial({ color: '#ffc94a', emissive: '#ff9d2e', emissiveIntensity: 0.55, metalness: 0.35, roughness: 0.32, side: THREE.DoubleSide });
   const beamMat = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color('#ffc451') } },
+    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color('#ffb648') } },
     vertexShader: `varying vec2 vUv;
       void main(){
         vUv = uv;
@@ -337,15 +362,15 @@ export function createShells(layout, terrain) {
         float glow = exp(-x * x * 3.5) * 0.45;
         float fade = pow(1.0 - vUv.y, 1.6) * smoothstep(0.0, 0.03, vUv.y);
         float flick = 0.88 + 0.12 * sin(uTime * 2.4 - vUv.y * 9.0);
-        vec3 c = mix(uColor, vec3(1.0, 0.97, 0.85), core * 0.6);
-        gl_FragColor = vec4(c, (core * 0.75 + glow) * fade * flick);
+        vec3 c = mix(uColor, vec3(1.0, 0.86, 0.55), core * 0.7);
+        gl_FragColor = vec4(c, min(0.6, (core * 0.6 + glow * 0.7) * fade * flick));
         #include <colorspace_fragment>
       }`,
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
   });
   const beamGeo = new THREE.PlaneGeometry(3.2, 30, 1, 1).translate(0, 15, 0);
-  const haloMat = new THREE.MeshBasicMaterial({ color: '#ffd98a', transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending });
-  const haloGeo = new THREE.RingGeometry(0.6, 1.25, 32).rotateX(-Math.PI / 2);
+  const haloMat = new THREE.MeshBasicMaterial({ color: '#ffc94a', transparent: true, opacity: 0.7, depthWrite: false });
+  const haloGeo = new THREE.RingGeometry(1.15, 1.35, 40).rotateX(-Math.PI / 2);
   const items = layout.shells.map((s) => {
     const g = new THREE.Group();
     const y = Math.max(s.y, 0) + 0.55;
@@ -378,15 +403,16 @@ export function createShells(layout, terrain) {
           it.shell.scale.setScalar(1.7 * (1 + k * 0.6) * Math.max(0, 1 - k * k));
           it.shell.rotation.y += dt * 12;
           it.beam.scale.set(1 - k, 1, 1 - k);
-          it.halo.material.opacity = 0.35 * (1 - k);
+          it.halo.material.opacity = 0.7 * (1 - k);
           if (k >= 1) { it.group.visible = false; it.collectT = -1; }
           continue;
         }
         it.shell.rotation.y = t * 1.3 + it.id;
         it.shell.position.y = Math.sin(t * 2 + it.id) * 0.15;
         it.shell.rotation.z = Math.sin(t * 1.4 + it.id) * 0.2;
-        const pulse = 1 + Math.sin(t * 3 + it.id) * 0.12;
-        it.halo.scale.setScalar(pulse);
+        const ph = (t * 0.6 + it.id * 0.13) % 1;
+        it.halo.scale.setScalar(0.6 + ph * 1.2);
+        it.halo.material.opacity = 0.75 * (1 - ph);
       }
     },
   };
