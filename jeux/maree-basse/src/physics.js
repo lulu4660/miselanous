@@ -28,7 +28,7 @@ export function createPhysics(terrain) {
   world.addContactMaterial(new CANNON.ContactMaterial(M.bouncy, M.static, { friction: 0.3, restitution: 0.6 }));
   world.addContactMaterial(new CANNON.ContactMaterial(M.bouncy, M.bouncy, { friction: 0.3, restitution: 0.7 }));
   world.addContactMaterial(new CANNON.ContactMaterial(M.prop, M.ground, { friction: 0.6, restitution: 0.15 }));
-  world.addContactMaterial(new CANNON.ContactMaterial(M.prop, M.car, { friction: 0.4, restitution: 0.25 }));
+  world.addContactMaterial(new CANNON.ContactMaterial(M.prop, M.car, { friction: 0.0, restitution: 0.2 }));
 
   // --- Island heightfield (same triangulation as the render mesh: see terrain.heightAt)
   const { N, V, cell, half, heights } = terrain;
@@ -87,7 +87,7 @@ export function createPhysics(terrain) {
   world.addEventListener('preStep', () => {
     car.preStep(world.dt);
     props.preStep(world.dt, car);
-    for (const p of props.list) if (p.K.light) { p.body.collisionResponse = false; lightBodies.push(p.body); }
+    for (const p of props.list) { p.body.collisionResponse = false; lightBodies.push(p.body); }
   });
   car.vehicle.addToWorld(world);
   world.addEventListener('preStep', () => {
@@ -101,7 +101,7 @@ export function createPhysics(terrain) {
     car.events.length = 0;
     for (const e of props.events) events.push(e);
     props.events.length = 0;
-    water.time = world.time;
+    water.time = world.stepnumber * STEP;
     // ripples at 60 Hz whatever the physics rate
     const every = Math.max(1, Math.round(1 / 60 / STEP));
     if (tick % every === 0) {
@@ -110,6 +110,63 @@ export function createPhysics(terrain) {
       waves.step(STEP * every);
     }
   });
+
+  // Car vs props: a light prop must never lift a 1150 kg car. Each prop's bounding sphere
+  // is resolved against the chassis box with a mass-weighted push (the prop takes nearly all
+  // of it) and an impulse exchange, as in the original hand-written version.
+  const B = { minX: -0.98, maxX: 0.98, minY: -0.42, maxY: 1.22, minZ: -2.14, maxZ: 2.18 };
+  const lp = new CANNON.Vec3(), wn = new CANNON.Vec3(), cp = new CANNON.Vec3(), vc = new CANNON.Vec3(), imp = new CANNON.Vec3();
+  const rr = new CANNON.Vec3(), rxn = new CANNON.Vec3(), t2 = new CANNON.Vec3();
+  function carProps() {
+    const cb = car.body;
+    for (const p of props.list) {
+      const b = p.body;
+      const dx = b.position.x - cb.position.x, dz = b.position.z - cb.position.z;
+      if (dx * dx + dz * dz > 16) continue;
+      cb.pointToLocalFrame(b.position, lp);
+      const cx = Math.max(B.minX, Math.min(B.maxX, lp.x)), cy = Math.max(B.minY, Math.min(B.maxY, lp.y)), cz = Math.max(B.minZ, Math.min(B.maxZ, lp.z));
+      let ox = lp.x - cx, oy = lp.y - cy, oz = lp.z - cz;
+      const d = Math.hypot(ox, oy, oz);
+      let pen;
+      const r = p.K.r;
+      if (d > 1e-5) {
+        if (d >= r) continue;
+        ox /= d; oy /= d; oz /= d; pen = r - d;
+      } else {
+        const fx = Math.min(lp.x - B.minX, B.maxX - lp.x), fy = Math.min(lp.y - B.minY, B.maxY - lp.y), fz = Math.min(lp.z - B.minZ, B.maxZ - lp.z);
+        ox = oy = oz = 0;
+        if (fx <= fy && fx <= fz) { ox = lp.x - B.minX < B.maxX - lp.x ? -1 : 1; pen = fx + r; }
+        else if (fy <= fz) { oy = lp.y - B.minY < B.maxY - lp.y ? -1 : 1; pen = fy + r; }
+        else { oz = lp.z - B.minZ < B.maxZ - lp.z ? -1 : 1; pen = fz + r; }
+      }
+      // never push the car up from below: contacts under the chassis push the prop sideways
+      if (oy < -0.3) { oy = 0; const l = Math.hypot(ox, oz) || 1; ox = ox / l || 1; oz /= l; }
+      cb.vectorToWorldFrame(lp.set(ox, oy, oz), wn);
+      cb.pointToWorldFrame(cp.set(cx, cy, cz), cp);
+      b.wakeUp();
+      const carShare = Math.min(0.3, (p.m / (p.m + 1150)) * 3);
+      b.position.x += wn.x * pen * (1 - carShare); b.position.y += wn.y * pen * (1 - carShare); b.position.z += wn.z * pen * (1 - carShare);
+      cb.position.x -= wn.x * pen * carShare; cb.position.z -= wn.z * pen * carShare;
+      car.velocityAt(vc, cp);
+      const rv = (b.velocity.x - vc.x) * wn.x + (b.velocity.y - vc.y) * wn.y + (b.velocity.z - vc.z) * wn.z;
+      if (rv >= 0) continue;
+      cp.vsub(cb.position, rr);
+      rr.cross(wn, rxn); cb.invInertiaWorld.vmult(rxn, t2); t2.cross(rr, rxn);
+      const kCar = cb.invMass + rxn.dot(wn);
+      const e = p.K.light ? 0.6 : 0.25;
+      const jn = (-(1 + e) * rv) / (b.invMass + kCar);
+      b.velocity.x += wn.x * jn * b.invMass; b.velocity.y += wn.y * jn * b.invMass + Math.min(4, jn * b.invMass * 0.15); b.velocity.z += wn.z * jn * b.invMass;
+      wn.scale(-jn, imp);
+      imp.y = Math.min(imp.y, 0) * 0.3; // the car is never lifted by a prop
+      cb.applyImpulse(imp, rr);
+      b.angularVelocity.x += (vc.z - b.velocity.z) * 1.2 / r; b.angularVelocity.z -= (vc.x - b.velocity.x) * 1.2 / r;
+      if (-rv > 0.8 && car.time - p.lastHit > 0.15) {
+        p.lastHit = car.time;
+        events.push({ type: 'carHit', kind: p.K.sound, prop: p, intensity: Math.min(1, -rv / 9), x: b.position.x, z: b.position.z });
+      }
+    }
+  }
+  world.addEventListener('postStep', carProps);
 
   // car collisions -> sound/camera events
   car.body.addEventListener('collide', (e) => {
@@ -134,14 +191,37 @@ export function createPhysics(terrain) {
   phys.addObstacle = (o) => {
     const h = Math.max(0.5, o.y1 - o.y0);
     const b = new CANNON.Body({ mass: 0, material: M.static });
-    if (o.kind === 'rock') b.addShape(new CANNON.Sphere(o.r), new CANNON.Vec3(0, 0, 0));
+    if (o.shape === 'sphere') b.addShape(new CANNON.Sphere(o.r), new CANNON.Vec3(0, 0, 0));
     else b.addShape(new CANNON.Cylinder(o.r, o.r, h, 10));
-    b.position.set(o.x, o.kind === 'rock' ? o.y1 - o.r * 0.55 : (o.y0 + o.y1) / 2, o.z);
+    b.position.set(o.x, o.shape === 'sphere' ? o.y1 - o.r * 0.55 : (o.y0 + o.y1) / 2, o.z);
     b.userData = { kind: 'obstacle', sound: o.kind === 'rock' ? 'rock' : 'wood' };
     world.addBody(b);
     o.body = b;
     obstacles.push(o);
     return o;
+  };
+  // reset onto a free spot: never inside a trunk, rock, hut or structure (they would eject the car)
+  phys.resetCar = (x, z, heading) => {
+    const blocked = (px, pz) => {
+      for (const o of obstacles) if ((o.x - px) ** 2 + (o.z - pz) ** 2 < (o.r + 2.5) ** 2 && o.body.collisionResponse) return true;
+      for (const s of terrain.structures) {
+        const dx = px - s.x, dz = pz - s.z;
+        const lx = dx * s.cos - dz * s.sin, lz = dx * s.sin + dz * s.cos;
+        if (Math.abs(lx) < s.hw + 2.5 && Math.abs(lz) < s.hl + 2.5) return true;
+      }
+      return false;
+    };
+    let bx = x, bz = z;
+    if (blocked(x, z)) {
+      search: for (let ring = 1; ring <= 12; ring++) {
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2, d = ring * 1.5;
+          const px = x + Math.sin(a) * d, pz = z + Math.cos(a) * d;
+          if (!blocked(px, pz) && terrain.heightAt(px, pz) > -1.5) { bx = px; bz = pz; break search; }
+        }
+      }
+    }
+    car.reset(bx, bz, heading);
   };
   phys.disableObstaclesNear = (x, z, r) => {
     for (const o of obstacles) if (Math.hypot(o.x - x, o.z - z) < r) o.body.collisionResponse = false;
@@ -189,7 +269,7 @@ export function createPhysics(terrain) {
   phys.update = function (frameDt) {
     const before = world.stepnumber;
     world.step(STEP, Math.min(frameDt, 0.1), 12);
-    phys.time = world.time;
+    phys.time = world.stepnumber * STEP;
     return world.stepnumber - before;
   };
 

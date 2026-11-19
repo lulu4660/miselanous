@@ -47,6 +47,7 @@ const HULL = [];
   HULL.push(new CANNON.Vec3(0, b.maxY + 0.05, 0));
 }
 export const GROUND_GROUP = 2;
+export const PROP_GROUP = 4;
 
 // Water sample points (buoyancy + drag), body frame
 const FLOAT = [];
@@ -58,7 +59,8 @@ export function createVehicle(world, terrain, water, material) {
   chassis.addShape(new CANNON.Box(new CANNON.Vec3(0.96, 0.4, 2.14)), new CANNON.Vec3(0, -0.02, 0.02));
   chassis.addShape(new CANNON.Box(new CANNON.Vec3(0.72, 0.38, 1.42)), new CANNON.Vec3(0, 0.8, -0.45));
   chassis.userData = { kind: 'car' };
-  chassis.collisionFilterMask = ~GROUND_GROUP;
+  // the island and the props are resolved by our own contact code (cheaper and steadier)
+  chassis.collisionFilterMask = ~(GROUND_GROUP | PROP_GROUP);
   // a slightly larger roll/pitch inertia than the boxes alone keeps it planted but lively
   chassis.updateMassProperties();
   chassis.inertia.x *= 1.25; chassis.inertia.z *= 1.6;
@@ -227,7 +229,7 @@ export function createVehicle(world, terrain, water, material) {
     car.submersion = subm;
     if (subm > 0.05) {
       const grounded = car.groundedCount;
-      const paddle = (grounded < 2 ? 1 : 0.3) * subm;
+      const paddle = (grounded < 2 ? 1 : 0.3) * subm * (U.y > 0.3 ? 1 : 0);
       F.scale(engineF * 0.6 * paddle, force);
       chassis.applyForce(force, rel.set(0, 0, 0));
       U.scale(car.steer * speedF * 900 * subm, tmp); chassis.torque.vadd(tmp, chassis.torque);

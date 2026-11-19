@@ -1,6 +1,7 @@
 // Floating / bumpable props as cannon-es rigid bodies with their real shapes, plus
 // buoyancy, water drag, wave drift, upright restoring torque and buoy tethers.
 import * as CANNON from 'cannon-es';
+import { PROP_GROUP } from './vehicle.js';
 
 const G = 9.81;
 
@@ -49,6 +50,7 @@ export function createProps(world, terrain, water, waves, materials) {
     if (s2) body.addShape(s2, off2);
     body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), opts.yaw ?? Math.random() * 6.28);
     body.userData = { kind: 'prop', prop: null };
+    body.collisionFilterGroup = PROP_GROUP;
     world.addBody(body);
     const p = {
       kind, K, r: K.r, m: K.m, body,

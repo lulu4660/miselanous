@@ -70,11 +70,11 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 #speed { right: calc(env(safe-area-inset-right, 0px) + 14px); top: calc(env(safe-area-inset-top, 0px) + 64px); font-size: 15px; padding: 6px 14px; gap: 6px; pointer-events: auto; cursor: pointer; }
 #perf { font-size: 11px; font-weight: 600; color: var(--cream); margin-left: 4px; }
 #speed b { font-size: 20px; min-width: 2ch; text-align: right; }
-#speed span { color: var(--cream-dim); font-weight: 500; font-size: 12px; }
+#speed span { color: var(--cream); font-weight: 600; font-size: 12px; }
 
 /* driving controls: steering bar bottom-left, pedals bottom-right */
 .ctl { position: fixed; z-index: 22; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-#wheel { left: calc(env(safe-area-inset-left, 0px) + 26px); bottom: calc(env(safe-area-inset-bottom, 0px) + 26px); width: min(44vw, 200px); height: 78px; border-radius: 999px;
+#wheel { left: calc(env(safe-area-inset-left, 0px) + 26px); bottom: calc(env(safe-area-inset-bottom, 0px) + 26px); width: min(200px, calc(100vw - 236px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))); height: 78px; border-radius: 999px;
   background: var(--glass); border: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; box-sizing: border-box; }
 #wheel .arr { width: 30px; height: 30px; opacity: .8; transition: opacity .1s ease, transform .1s ease; }
 #wheel.left .arr.l, #wheel.right .arr.r { opacity: 1; transform: scale(1.18); }
@@ -85,7 +85,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .pedal { border-radius: 22px; background: var(--glass); border: 1px solid var(--line); display: grid; place-items: center; align-content: center; gap: 4px; color: var(--cream);
   transition: transform .06s ease, background .06s ease; }
 .pedal svg { width: 30px; height: 30px; }
-.pedal small { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; line-height: 1.1; text-align: center; }
+.pedal small { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; line-height: 1.15; text-align: center; padding: 0 8px; }
 #brakeP { width: 76px; height: 92px; }
 #gasP { width: 84px; height: 124px; background: rgba(255, 123, 92, .55); border-color: rgba(255, 220, 200, .5); }
 .pedal.down { transform: scale(.94) translateY(2px); background: var(--glass-strong); }
@@ -94,7 +94,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   background: var(--glass); border: 1px solid var(--line); display: grid; place-items: center; touch-action: none; padding: 0; }
 #horn svg { width: 24px; height: 24px; }
 #horn.down { transform: scale(.92); background: var(--glass-strong); }
-@media (hover: hover) and (pointer: fine) { .ctl, #horn { display: none; } }
+@media (hover: hover) and (pointer: fine) { #wheel, #pedals, #horn { display: none; } }
 
 /* toast */
 #toast { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 15%); transform: translate(-50%, 10px); text-align: center; opacity: 0; transition: opacity .35s ease, transform .35s ease; width: min(90vw, 520px); }
@@ -105,8 +105,9 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 #edge { position: fixed; left: 0; top: 0; width: 40px; height: 40px; margin: -20px 0 0 -20px; z-index: 18; pointer-events: none; opacity: 0; transition: opacity .25s ease; }
 #edge.on { opacity: 1; }
 #edge svg { width: 40px; height: 40px; filter: drop-shadow(0 2px 4px rgba(43,34,51,.5)); }
-body:not(.playing) .ctl, body:not(.playing) #horn, #hud:not(.on) .tr, #hud:not(.on) #speed { display: none; }
-body.ended .ctl, body.ended #horn, body.ended #speed, body.ended #compass, body.ended #edge { display: none; }
+body:not(.playing) #wheel, body:not(.playing) #pedals, body:not(.playing) #horn, #hud:not(.on) .tr, #hud:not(.on) #speed { display: none; }
+.icon-btn[hidden] { display: none; }
+body.ended #wheel, body.ended #pedals, body.ended #horn, body.ended #speed, body.ended #compass, body.ended #edge { display: none; }
 #fade { background: #fff4e2; opacity: 0; transition: opacity .35s ease; z-index: 40; }
 #fade.on { opacity: 1; }
 #vignette { z-index: 10; background: radial-gradient(130% 100% at 50% 45%, rgba(0,0,0,0) 55%, rgba(60, 30, 70, .28) 100%); }
@@ -125,6 +126,13 @@ body.ended .ctl, body.ended #horn, body.ended #speed, body.ended #compass, body.
 #err h2 { font-family: var(--font-display); font-weight: 400; font-size: 34px; margin: 0 0 10px; }
 #err p { color: var(--cream-dim); line-height: 1.5; font-size: 15px; margin: 0 0 10px; }
 #err code { display: block; font-size: 12px; opacity: .7; word-break: break-word; margin-top: 12px; }
+@media (max-width: 389px) {
+  #wheel { left: calc(env(safe-area-inset-left, 0px) + 22px); width: calc(100vw - 196px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)); padding: 0 10px; }
+  #pedals { gap: 8px; right: calc(env(safe-area-inset-right, 0px) + 12px); }
+  #brakeP { width: 64px; } #gasP { width: 72px; }
+  .pedal small { padding: 0 4px; letter-spacing: .02em; }
+  #horn { right: calc(env(safe-area-inset-right, 0px) + 16px); }
+}
 @media (max-height: 520px) {
   #title { padding-top: calc(env(safe-area-inset-top, 0px) + 4vh); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4vh); }
   #title .tag { font-size: 15px; margin-top: 8px; max-width: 46ch; }

@@ -1,6 +1,7 @@
-// Post-processing with three.js addons: MSAA render target → bloom (UnrealBloomPass) →
+// Post-processing with three.js addons: HDR render target → bloom (UnrealBloomPass) →
 // miniature tilt-shift (Horizontal/VerticalTiltShiftShader with an in-focus band) →
-// colour grade + vignette (ShaderPass) → OutputPass (tone mapping + sRGB).
+// colour grade + vignette (ShaderPass) → OutputPass (tone mapping + sRGB) → FXAA.
+// (No MSAA on the composer targets: every pass would pay a resolve; one FXAA pass is cheaper.)
 // Effects levels: 0 = direct render, 1 = grade, 2 = + tilt-shift, 3 = + bloom.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
@@ -10,6 +11,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { HorizontalTiltShiftShader } from 'three/examples/jsm/shaders/HorizontalTiltShiftShader.js';
 import { VerticalTiltShiftShader } from 'three/examples/jsm/shaders/VerticalTiltShiftShader.js';
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 
 // keep a sharp band around the focus line, blur grows beyond it
 function withFocusBand(shader) {
@@ -61,7 +63,6 @@ export function createPost(renderer, scene, camera) {
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   const target = new THREE.WebGLRenderTarget(size.x, size.y, {
     type: halfOK ? THREE.HalfFloatType : THREE.UnsignedByteType,
-    samples: 4,
   });
   const composer = new EffectComposer(renderer, target);
   const renderPass = new RenderPass(scene, camera);
@@ -70,12 +71,14 @@ export function createPost(renderer, scene, camera) {
   const tiltV = new ShaderPass(withFocusBand(VerticalTiltShiftShader));
   const grade = new ShaderPass(GradeShader);
   const output = new OutputPass();
+  const fxaa = new ShaderPass(FXAAShader);
   composer.addPass(renderPass);
   composer.addPass(bloom);
   composer.addPass(tiltH);
   composer.addPass(tiltV);
   composer.addPass(grade);
   composer.addPass(output);
+  composer.addPass(fxaa);
 
   const post = {
     level: 0, broken: false, checked: false,
@@ -94,6 +97,7 @@ export function createPost(renderer, scene, camera) {
       tiltH.uniforms.h.value = 2.0 / pw;
       tiltV.uniforms.v.value = 2.0 / (h * pr);
       grade.uniforms.uAspect.value = w / h;
+      fxaa.uniforms.resolution.value.set(1 / pw, 1 / Math.max(1, h * pr));
     },
     setFocus(r) { tiltH.uniforms.r.value = r; tiltV.uniforms.r.value = r; },
     render(dt) {

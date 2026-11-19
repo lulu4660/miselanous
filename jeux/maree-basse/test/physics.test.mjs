@@ -311,3 +311,39 @@ test('physics step cost stays within budget on the real island', () => {
   console.log(`  ${ms.toFixed(2)} ms per 60 Hz frame (physics + ripples)`);
   assert.ok(ms < 4);
 });
+
+test('hitting heavy props (crates, barrels, buoys) at speed does not flip the car', () => {
+  const t = flatTerrain(0.5);
+  let flips = 0, runs = 0;
+  for (const kind of ['crate', 'barrel', 'buoy']) {
+    for (const off of [-0.92, -0.5, 0, 0.5, 0.92]) for (const v of [7, 12, 16]) {
+      const phys = createPhysics(t);
+      phys.car.reset(0, -30, 0);
+      run(phys, 1);
+      phys.props.add(kind, off, -30 + 2.2 + v * 1.2, {});
+      run(phys, 0.6);
+      phys.car.vel.set(0, 0, v);
+      phys.car.input.throttle = 1;
+      let minUp = 1;
+      run(phys, 4, () => { minUp = Math.min(minUp, phys.car.R[4]); });
+      runs++;
+      if (minUp < 0.35) flips++;
+    }
+  }
+  console.log(`  ${flips} flips in ${runs} heavy-prop impacts`);
+  assert.ok(flips <= 1);
+});
+
+test('the brake pedal (throttle -1) stops the car from top speed, then reverses', () => {
+  const t = flatTerrain(0.5);
+  const phys = createPhysics(t);
+  phys.car.reset(0, -100, 0);
+  phys.car.input.throttle = 1;
+  run(phys, 6);
+  const v0 = phys.car.forwardSpeed;
+  phys.car.input.throttle = -1;
+  let tStop = -1, tt = 0;
+  run(phys, 5, () => { tt += STEP; if (tStop < 0 && phys.car.forwardSpeed < 0.3) tStop = tt; });
+  console.log(`  ${v0.toFixed(1)} m/s -> stopped after ${tStop.toFixed(2)} s, then ${phys.car.forwardSpeed.toFixed(2)} m/s`);
+  assert.ok(tStop > 0 && tStop < 2.6 && phys.car.forwardSpeed < -3);
+});

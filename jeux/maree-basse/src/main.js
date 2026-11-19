@@ -109,7 +109,7 @@ async function boot(hot) {
 
   // Physics obstacles
   for (const p of layout.palms) phys.addObstacle({ x: p.x, z: p.z, r: 0.3, y0: p.y - 1, y1: p.y + 6, kind: 'wood' });
-  for (const r of layout.rocks) phys.addObstacle({ x: r.x, z: r.z, r: r.s * 0.85, y0: r.y - 2, y1: r.y + r.s * 0.55, kind: 'rock' });
+  for (const r of layout.rocks) phys.addObstacle({ x: r.x, z: r.z, r: r.s * 0.85, y0: r.y - 2, y1: r.y + r.s * 0.55, kind: 'rock', shape: 'sphere' });
   for (const o of structures.obstacles) phys.addObstacle(o);
   for (const p of layout.props) props.add(p.kind, p.x, p.z, { tether: p.tether, color: p.color });
 
@@ -138,7 +138,7 @@ async function boot(hot) {
   if (hot && hot.found) {
     for (const id of hot.found) { const it = shells.items.find((s) => s.id === id); if (it) { it.taken = true; it.group.visible = false; game.found++; } }
   }
-  if (hot && hot.car) car.reset(hot.car.x, hot.car.z, hot.car.heading);
+  if (hot && hot.car) phys.resetCar(hot.car.x, hot.car.z, hot.car.heading);
   window.claude?.hot?.snapshot?.(() => ({
     found: shells.items.filter((s) => s.taken).map((s) => s.id),
     car: { x: car.pos.x, z: car.pos.z, heading: Math.atan2(car.R[2], car.R[8]) },
@@ -191,11 +191,14 @@ async function boot(hot) {
   // any touch re-unlocks audio inside a gesture (iOS suspends it after interruptions)
   window.addEventListener('pointerdown', () => { if (game.mode === 'play') audio.unlock(); }, { passive: true });
   for (const id of ['btnSound', 'btnReset', 'endBtn', 'play']) $(id).addEventListener('click', (e) => e.currentTarget.blur());
-  const updateFxIcon = () => { $('btnFx').setAttribute('aria-pressed', String(fxLevel > 0)); $('btnFx').classList.toggle('off', fxLevel === 0); };
-  if (!post || post.broken) $('btnFx').hidden = true;
+  const updateFxIcon = () => {
+    $('btnFx').hidden = !post || post.broken;
+    $('btnFx').setAttribute('aria-pressed', String(fxLevel > 0)); $('btnFx').classList.toggle('off', fxLevel === 0);
+  };
   updateFxIcon();
   $('btnFx').addEventListener('click', () => {
     audio.uiTap?.();
+    if (!post || post.broken) { updateFxIcon(); return; }
     fxLevel = fxLevel > 0 ? 0 : Math.max(1, quality.fx);
     post?.setLevel(fxLevel);
     try { localStorage.setItem('mb-fx', fxLevel > 0 ? '1' : '0'); } catch (e) { /* ignore */ }
@@ -212,7 +215,7 @@ async function boot(hot) {
   const respawn = (msg) => {
     $('fade').classList.add('on');
     setTimeout(() => {
-      car.reset(safe.x, safe.z, safe.heading);
+      phys.resetCar(safe.x, safe.z, safe.heading);
       cam.snap = true;
       for (let i = 0; i < 4; i++) tracks.cut(i);
       $('fade').classList.remove('on');
@@ -375,8 +378,8 @@ async function boot(hot) {
     edgeP.set(nearest.x, nearest.baseY + 1.5, nearest.z).project(camera);
     const behind = edgeP.z > 1;
     let x = behind ? -edgeP.x : edgeP.x, y = behind ? -edgeP.y : edgeP.y;
-    if (!behind && Math.abs(x) < 0.86 && y < 0.72 && y > -0.8) { el.classList.remove('on'); return; }
-    const m = Math.max(Math.abs(x) / 0.84, y > 0 ? y / 0.7 : -y / 0.62, 1e-4);
+    if (!behind && Math.abs(x) < 0.86 && y < 0.72 && y > -0.42) { el.classList.remove('on'); return; }
+    const m = Math.max(Math.abs(x) / 0.84, y > 0 ? y / 0.7 : -y / 0.4, 1e-4); // stays above the driving controls
     x /= m; y /= m;
     const px = (x * 0.5 + 0.5) * window.innerWidth, py = (-y * 0.5 + 0.5) * window.innerHeight;
     el.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) rotate(${Math.atan2(-y, x).toFixed(3)}rad)`;
@@ -495,6 +498,7 @@ async function boot(hot) {
       edgeP.set(car.pos.x, car.pos.y + 0.5, car.pos.z).project(camera);
       post.setFocus(Math.max(0.15, Math.min(0.85, edgeP.y * 0.5 + 0.5)));
       post.render(dt);
+      if (post.broken && !$('btnFx').hidden) updateFxIcon();
     } else renderer.render(scene, camera);
 
     // adaptive resolution (rAF is capped at the display rate, so "fast" means at the cap)

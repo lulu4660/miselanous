@@ -18,14 +18,15 @@ export function createInput({ wheel, wheelKnob, pedals, gas, brake, horn }) {
   const steerFrom = (clientX) => {
     const r = wheel.getBoundingClientRect();
     const half = r.width / 2;
-    let v = (clientX - (r.left + half)) / (half * 0.78);
+    // the outer ~40% of each half (where the ◀ / ▶ icons sit) is full lock
+    let v = (clientX - (r.left + half)) / (half * 0.58);
     const DZ = 0.08;
     v = Math.abs(v) < DZ ? 0 : (v - Math.sign(v) * DZ) / (1 - DZ);
     return Math.max(-1, Math.min(1, v));
   };
   const showKnob = (v) => {
     const r = wheel.getBoundingClientRect();
-    wheelKnob.style.transform = `translateX(${(v * r.width * 0.36).toFixed(1)}px)`;
+    wheelKnob.style.transform = `translateX(${(v * Math.max(0, r.width / 2 - 34)).toFixed(1)}px)`;
     wheel.classList.toggle('left', v < -0.05);
     wheel.classList.toggle('right', v > 0.05);
   };
@@ -135,7 +136,7 @@ export function createInput({ wheel, wheelKnob, pedals, gas, brake, horn }) {
     const ky = (K.has('up') ? 1 : 0) - (K.has('down') ? 1 : 0);
     let g = false, b = false;
     for (const v of state.pedalPointers.values()) { if (v === 'gas') g = true; if (v === 'brake') b = true; }
-    const sx = state.steer.id !== null ? Math.sign(state.steer.x) * Math.pow(Math.abs(state.steer.x), 1.25) : 0;
+    const sx = state.steer.id !== null ? Math.sign(state.steer.x) * Math.pow(Math.min(1, Math.abs(state.steer.x)), 1.2) : 0;
     const steer = kx !== 0 ? -kx : -sx;
     const throttle = b || ky < 0 ? -1 : g || ky > 0 ? 1 : 0;
     return { steer, throttle, brake: throttle === 0 ? 0.12 : 0, handbrake: K.has('hb'), horn: state.horn || K.has('horn') };
