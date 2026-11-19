@@ -209,8 +209,7 @@ export function patchMaterial(mat, opts = {}) {
         float tt = clamp(dot(vMbWorld - cameraPosition, ab) / max(dot(ab, ab), 1e-3), 0.0, 1.0);
         float dd = length(vMbWorld - (cameraPosition + ab * tt));
         float k = (1.0 - smoothstep(1.5, 3.4, dd)) * (1.0 - smoothstep(0.78, 0.92, tt));
-        k = max(k, 1.0 - smoothstep(3.0, 6.0, length(vMbWorld - cameraPosition)));
-        ${o.cutout === 2 ? 'k *= smoothstep(uCarPos.y + 0.9, uCarPos.y + 1.6, vMbWorld.y);' : ''}
+        ${o.cutout === 2 ? 'k *= smoothstep(uCarPos.y + 0.9, uCarPos.y + 1.6, vMbWorld.y) * smoothstep(0.4, 0.7, vRock);' : 'k = max(k, 1.0 - smoothstep(3.0, 6.0, length(vMbWorld - cameraPosition)));'}
         k *= uCutout;
         if (k > 0.001 && k * 1.08 > mbBayer(gl_FragCoord.xy)) discard;
       }` : ''}`)

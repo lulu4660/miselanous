@@ -127,6 +127,7 @@ body.ended #wheel, body.ended #pedals, body.ended #horn, body.ended #speed, body
 #err p { color: var(--cream-dim); line-height: 1.5; font-size: 15px; margin: 0 0 10px; }
 #err code { display: block; font-size: 12px; opacity: .7; word-break: break-word; margin-top: 12px; }
 @media (max-width: 389px) {
+  .tr { gap: 6px; } .icon-btn { width: 40px; height: 40px; } .icon-btn svg { width: 20px; height: 20px; }
   #wheel { left: calc(env(safe-area-inset-left, 0px) + 22px); width: calc(100vw - 196px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)); padding: 0 10px; }
   #pedals { gap: 8px; right: calc(env(safe-area-inset-right, 0px) + 12px); }
   #brakeP { width: 64px; } #gasP { width: 72px; }
@@ -159,6 +160,9 @@ body.ended #wheel, body.ended #pedals, body.ended #horn, body.ended #speed, body
   <div class="tr">
     <button class="icon-btn" id="btnFx" type="button" aria-label="Effets visuels" aria-pressed="true">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 13.7 9l5.8 1.6-5.8 1.7L12 18l-1.7-5.7L4.5 10.6 10.3 9Z" fill="#fff4e2"/><path d="M18.5 15.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7Z" fill="#ffc94a"/></svg>
+    </button>
+    <button class="icon-btn" id="btnCam" type="button" aria-label="Changer de vue">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff4e2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5h3l1.6-2.2h6.8L17 8.5h3v10H4Z" fill="rgba(255,244,226,.12)"/><circle cx="12" cy="13.3" r="3.4"/></svg>
     </button>
     <button class="icon-btn" id="btnReset" type="button" aria-label="Replacer le 4×4 sur la plage">
       <svg viewBox="0 0 24 24" fill="none" stroke="#fff4e2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg>

@@ -178,6 +178,13 @@ else if (scenario.startsWith('fx')) {
   const diff = (p, q) => { const A = PNG(p), B = PNG(q); let s = 0; for (let i = 0; i < A.length; i++) s += Math.abs(A[i] - B[i]); return (s / A.length).toFixed(2); };
   console.log('mean abs diff direct vs direct (1 frame later):', diff(a, a2), ' direct vs composer identity:', diff(a, b));
 }
+else if (scenario.startsWith('views')) {
+  await drive(1, 0); await wait(2500);
+  for (const v of ['chase', 'high', 'cinema']) {
+    await page.evaluate((v) => window.__mb.setView(v), v);
+    await drive(1, v === 'cinema' ? 0.35 : 0.2); await wait(1600); await snap('view_' + v);
+  }
+}
 else if (scenario.startsWith('perf')) {
   // fixed-quality perf proxy: frame ms under SwiftShader, JS ms per frame, tris & calls
   await drive(1, 0.15); await wait(2000);

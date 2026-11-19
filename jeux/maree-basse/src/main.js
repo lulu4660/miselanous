@@ -55,8 +55,6 @@ async function boot(hot) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, quality.dpr) * renderScale);
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
-    const portrait = h > w;
-    camera.fov = portrait ? 52 : 36;
     camera.updateProjectionMatrix();
     particles?.setScale(h * renderer.getPixelRatio(), camera.fov);
     post?.setSize(w, h, renderer.getPixelRatio());
@@ -89,7 +87,7 @@ async function boot(hot) {
   const sun = new THREE.DirectionalLight(PALETTE.sun, 4.3);
   sun.castShadow = true;
   sun.shadow.mapSize.set(quality.shadow, quality.shadow);
-  const S = 34;
+  const S = 40;
   Object.assign(sun.shadow.camera, { left: -S, right: S, top: S, bottom: -S, near: 1, far: 220 });
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.045;
@@ -228,50 +226,92 @@ async function boot(hot) {
   // ---------- Camera
   const cam = { yaw: spawn.heading, target: new THREE.Vector3(car.pos.x, car.pos.y, car.pos.z), shake: 0, snap: true, dist: 12 };
   const tmpV = new THREE.Vector3();
+  // Views: 'chase' (3/4 behind, horizon in frame), 'high' (diorama), 'cinema' (low side-trailing)
+  const VIEWS = {
+    chase: { label: 'Poursuite', p: { dist: 10.5, hgt: 6.3, look: 5.5, lookY: 0.9, fov: 60, side: 0 }, l: { dist: 9.5, hgt: 4.8, look: 4, lookY: 0.9, fov: 46, side: 0 } },
+    high: { label: 'Plongée', p: { dist: 21, hgt: 33, look: 6.5, lookY: 0.3, fov: 52, side: 0 }, l: { dist: 14, hgt: 27, look: 1, lookY: 0.3, fov: 36, side: 0 } },
+    cinema: { label: 'Cinéma', p: { dist: 12, hgt: 3.1, look: 0.2, lookY: 0.9, fov: 62, side: 0.85 }, l: { dist: 8.5, hgt: 2.2, look: 0.4, lookY: 0.8, fov: 48, side: 0.95 } },
+  };
+  const VIEW_ORDER = ['chase', 'high', 'cinema'];
+  let view = 'chase';
+  try { const v = localStorage.getItem('mb-cam'); if (VIEWS[v]) view = v; } catch (e) { /* ignore */ }
+  cam.pos = new THREE.Vector3(); cam.roll = 0; cam.fov = 60; cam.travelYaw = spawn.heading;
+  const desired = new THREE.Vector3();
   function updateCamera(dt) {
     const portrait = window.innerHeight > window.innerWidth;
+    const cp = car.rpos || car.pos;
     const fx = car.R[2], fz = car.R[8];
     const carYaw = Math.atan2(fx, fz);
     const sp = car.speed;
     if (game.mode === 'title') {
       cam.yaw += dt * 0.07;
       const d = portrait ? 15 : 13;
-      tmpV.set(car.pos.x - Math.sin(cam.yaw) * d, car.pos.y + (portrait ? 4.2 : 3.4), car.pos.z - Math.cos(cam.yaw) * d);
+      tmpV.set(cp.x - Math.sin(cam.yaw) * d, cp.y + (portrait ? 4.2 : 3.4), cp.z - Math.cos(cam.yaw) * d);
       camera.position.copy(tmpV);
-      cam.target.set(car.pos.x, car.pos.y + (portrait ? 0.4 : 1.0), car.pos.z);
+      cam.pos.copy(tmpV);
+      cam.target.set(cp.x, cp.y + (portrait ? 0.4 : 1.0), cp.z);
       camera.lookAt(cam.target);
+      setFov(portrait ? 56 : 44);
       scene.fog.near = 22; scene.fog.far = 190;
+      cam.travelYaw = cam.yaw;
       return;
     }
-    const follow = car.forwardSpeed > -1.5 ? 2.0 : 0.3;
-    const k = 1 - Math.exp(-dt * follow * Math.min(1, 0.25 + sp / 6));
-    cam.yaw += wrapAngle(carYaw - cam.yaw) * (cam.snap ? 1 : k);
-    // look ahead along the camera heading plus where the car is actually going (stays
-    // centred when the car spins or slides), capped so it never leaves the frame
-    const base = portrait ? 6.5 : 1.0;
-    let lx = Math.sin(cam.yaw) * base + car.vel.x * (portrait ? 0.32 : 0.18);
-    let lz = Math.cos(cam.yaw) * base + car.vel.z * (portrait ? 0.32 : 0.18);
-    const ll = Math.hypot(lx, lz), cap = portrait ? 12 : 5;
-    if (ll > cap) { lx *= cap / ll; lz *= cap / ll; }
-    tmpV.set(car.pos.x + lx, Math.max(car.pos.y, -0.4) + 0.3, car.pos.z + lz);
-    if (cam.snap) cam.target.copy(tmpV); else cam.target.lerp(tmpV, 1 - Math.exp(-dt * 4));
-    const zoom = 1 + Math.min(sp, 20) * 0.012;
-    const dist = (portrait ? 21 : 14) * zoom;
-    const hgt = (portrait ? 33 : 27) * zoom;
-    tmpV.set(cam.target.x - Math.sin(cam.yaw) * dist, cam.target.y + hgt, cam.target.z - Math.cos(cam.yaw) * dist);
-    const gh = Math.max(terrain.heightAt(tmpV.x, tmpV.z), 0);
-    if (tmpV.y < gh + 2.5) tmpV.y = gh + 2.5;
-    const cd = Math.hypot(dist, hgt);
-    scene.fog.near = cd * 1.02; scene.fog.far = cd + 150;
-    if (cam.snap) camera.position.copy(tmpV); else camera.position.lerp(tmpV, 1 - Math.exp(-dt * 5));
+    const V = portrait ? VIEWS[view].p : VIEWS[view].l;
+    // heading to follow: the direction of travel when moving (drifts read well), else the nose
+    const vYaw = Math.atan2(car.vel.x, car.vel.z);
+    const moveW = Math.min(1, Math.max(0, (car.forwardSpeed - 2) / 6));
+    const wantYaw = carYaw + wrapAngle(vYaw - carYaw) * moveW * 0.7;
+    const follow = car.forwardSpeed > -1.5 ? (view === 'high' ? 2.0 : 2.6) : 0.35;
+    const k = 1 - Math.exp(-dt * follow * Math.min(1, 0.3 + sp / 5));
+    const prevYaw = cam.yaw;
+    cam.yaw += wrapAngle(wantYaw - cam.yaw) * (cam.snap ? 1 : k);
+    const yawRate = wrapAngle(cam.yaw - prevYaw) / Math.max(dt, 1e-3);
+    const spd = Math.min(sp, 22);
+    // target ahead of the car
+    const look = V.look + spd * (view === 'high' ? 0.32 : view === 'cinema' ? 0.04 : 0.18);
+    tmpV.set(cp.x + Math.sin(cam.yaw) * look, Math.max(cp.y, -0.4) + V.lookY, cp.z + Math.cos(cam.yaw) * look);
+    if (cam.snap) cam.target.copy(tmpV); else cam.target.lerp(tmpV, 1 - Math.exp(-dt * 7));
+    // camera behind (and for 'cinema' to the side), pulling back a little with speed
+    const dist = V.dist + spd * (view === 'high' ? 0.25 : 0.14);
+    const hgt = V.hgt + spd * (view === 'high' ? 0.4 : 0.035);
+    const a = cam.yaw + Math.PI + V.side;
+    desired.set(cp.x + Math.sin(a) * dist, Math.max(cp.y, -0.4) + hgt, cp.z + Math.cos(a) * dist);
+    // stay above the ground (and above cliffs between the camera and the car)
+    let gh = Math.max(terrain.heightAt(desired.x, desired.z), 0);
+    const mx = (desired.x + cp.x) / 2, mz = (desired.z + cp.z) / 2;
+    gh = Math.max(gh, terrain.heightAt(mx, mz) - hgt * 0.35);
+    if (desired.y < gh + 1.6) desired.y = gh + 1.6;
+    if (cam.snap) cam.pos.copy(desired); else cam.pos.lerp(desired, 1 - Math.exp(-dt * (view === 'high' ? 5 : 6)));
+    camera.position.copy(cam.pos);
     cam.snap = false;
     camera.lookAt(cam.target);
+    // a hint of roll into turns and a wider lens at speed
+    const rollT = view === 'high' ? 0 : Math.max(-0.06, Math.min(0.06, -yawRate * 0.035 * Math.min(1, sp / 8)));
+    cam.roll += (rollT - cam.roll) * Math.min(1, dt * 4);
+    if (cam.roll) camera.rotateZ(cam.roll);
+    setFov(V.fov + (view === 'high' ? 0 : Math.min(7, spd * 0.33)));
+    const cd = camera.position.distanceTo(cp);
+    scene.fog.near = Math.max(14, cd * 1.02); scene.fog.far = cd + (view === 'high' ? 150 : 175);
     if (cam.shake > 0) {
       cam.shake = Math.max(0, cam.shake - dt * 2.2);
       const s = cam.shake * cam.shake * 0.35;
       camera.position.x += (Math.random() - 0.5) * s; camera.position.y += (Math.random() - 0.5) * s; camera.position.z += (Math.random() - 0.5) * s;
     }
   }
+  function setFov(f) {
+    if (Math.abs(camera.fov - f) < 0.01) return;
+    camera.fov += (f - camera.fov) * 0.15;
+    camera.updateProjectionMatrix();
+    particles?.setScale(window.innerHeight * renderer.getPixelRatio(), camera.fov);
+  }
+  const cycleView = () => {
+    view = VIEW_ORDER[(VIEW_ORDER.indexOf(view) + 1) % VIEW_ORDER.length];
+    try { localStorage.setItem('mb-cam', view); } catch (e) { /* ignore */ }
+    toast(`Vue ${VIEWS[view].label}`, '', 1300);
+    audio.uiTap?.();
+  };
+  $('btnCam').addEventListener('click', (e) => { cycleView(); e.currentTarget.blur(); });
+  window.addEventListener('keydown', (e) => { if (e.code === 'KeyC' && game.mode === 'play') cycleView(); });
 
   // ---------- Controls -> car (car-relative: no camera in the loop)
   function drive() {
@@ -402,7 +442,7 @@ async function boot(hot) {
   let hudT = 0, perfAcc = 0, perfN = 0, perfT = 0, hornWas = false, fpsShown = 60;
   $('speed').addEventListener('click', () => { $('perf').hidden = !$('perf').hidden; $('perf').textContent = '…'; });
   const frameTimes = [];
-  window.__mb = { phys, car, game, camera, renderer, scene, start, quality, layout, terrain, post, setFx: (n) => { fxLevel = n; post?.setLevel(n); } };
+  window.__mb = { phys, car, game, camera, renderer, scene, start, quality, layout, terrain, post, setFx: (n) => { fxLevel = n; post?.setLevel(n); }, setView: (v) => { view = v; cam.snap = true; } };
 
   function frame(now) {
     requestAnimationFrame(frame);
