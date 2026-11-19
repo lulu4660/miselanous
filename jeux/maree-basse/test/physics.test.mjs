@@ -111,7 +111,7 @@ test('no NaN after 60 s of random input on the real island', () => {
 test('props reach buoyant equilibrium in still water', () => {
   const t = flatTerrain(-2.5);
   const phys = createPhysics(t);
-  phys.car.reset(100, 100, 0);
+  phys.car.reset(14, 14, 0); // close enough that props stay awake and simulated
   const kinds = ['ball', 'ring', 'buoy', 'barrel', 'melon'];
   const ps = kinds.map((k, i) => phys.props.add(k, i * 3, 0, { yOff: 1.5 }));
   run(phys, 12);
@@ -219,4 +219,95 @@ test('an upside-down car rights itself within a few seconds (flat ground and sha
     console.log(`  ground ${h}: upright after ${upright.toFixed(1)} s`);
     assert.ok(upright > 0 && upright < 6.5);
   }
+});
+
+import * as CANNON from 'cannon-es';
+
+test('cannon heightfield matches terrain.heightAt (raycasts at 1000 off-vertex points)', () => {
+  const t = createTerrain(SEED);
+  const phys = createPhysics(t);
+  let worst = 0, n = 0;
+  for (let k = 0; k < 1000; k++) {
+    const x = (Math.random() - 0.5) * 300, z = (Math.random() - 0.5) * 300;
+    const r = new CANNON.RaycastResult();
+    phys.world.raycastClosest(new CANNON.Vec3(x, 40, z), new CANNON.Vec3(x, -20, z), {}, r);
+    if (r.hasHit && r.body === phys.ground) { worst = Math.max(worst, Math.abs(r.hitPointWorld.y - t.heightAt(x, z))); n++; }
+  }
+  console.log(`  ${n} hits, worst error ${worst.toExponential(2)} m`);
+  assert.ok(n > 900 && worst < 1e-3);
+});
+
+test('a beach ball against the parked car neither jitters nor gets ejected', () => {
+  const t = flatTerrain(0.5);
+  const phys = createPhysics(t);
+  phys.car.reset(0, 0, 0);
+  run(phys, 2);
+  const ball = phys.props.add('ball', 1.4, 0, { yOff: 0 });
+  run(phys, 5);
+  const v = Math.hypot(ball.vel.x, ball.vel.y, ball.vel.z);
+  console.log(`  ball speed ${v.toFixed(3)} m/s at ${ball.pos.x.toFixed(2)}, ${ball.pos.y.toFixed(2)}, car speed ${phys.car.speed.toFixed(3)}`);
+  assert.ok(v < 0.2 && Math.abs(ball.pos.x) < 4 && phys.car.speed < 0.05);
+});
+
+test('driving over light props does not lift the car (wheel rays ignore them)', () => {
+  const t = flatTerrain(0.5);
+  const phys = createPhysics(t);
+  phys.car.reset(0, -20, 0);
+  run(phys, 1.5);
+  for (let i = 0; i < 6; i++) phys.props.add(i % 2 ? 'ring' : 'ball', (i % 2 ? 0.9 : -0.9), -10 + i * 1.5, {});
+  const y0 = phys.car.pos.y;
+  let maxRise = 0;
+  phys.car.input.throttle = 0.6;
+  run(phys, 4, () => { maxRise = Math.max(maxRise, phys.car.pos.y - y0); });
+  console.log(`  max chassis rise ${maxRise.toFixed(2)} m`);
+  assert.ok(maxRise < 0.35);
+});
+
+test('no tunnelling through the pier at top speed', () => {
+  const t = createTerrain(SEED);
+  const L = createLayout(t);
+  const deck = L.pier.deck;
+  for (const side of [-1, 1]) {
+    const lx = side * (deck.hw + 12), lz = 0;
+    const x = deck.x + lx * deck.cos, z = deck.z - lx * deck.sin;
+    const phys = createPhysics(t);
+    phys.car.reset(x, z, Math.atan2(deck.x - x, deck.z - z));
+    run(phys, 1);
+    // launch it at 21 m/s straight at the deck
+    const h = Math.atan2(deck.x - x, deck.z - z);
+    phys.car.vel.set(Math.sin(h) * 21, 0, Math.cos(h) * 21);
+    phys.car.input.throttle = 1;
+    run(phys, 3);
+    const dx = phys.car.pos.x - deck.x, dz = phys.car.pos.z - deck.z;
+    const local = dx * deck.cos - dz * deck.sin;
+    console.log(`  side ${side}: ended at local x ${local.toFixed(1)} (deck half width ${deck.hw})`);
+    assert.ok(Math.sign(local) === side || Math.abs(local) < deck.hw + 0.5, 'stayed on its side or climbed on the deck');
+  }
+});
+
+test('floating props far from the car fall asleep', () => {
+  const t = flatTerrain(-2);
+  const phys = createPhysics(t);
+  phys.car.reset(0, 0, 0);
+  const p = phys.props.add('buoy', 120, 0, {});
+  run(phys, 12);
+  console.log(`  sleepState ${p.body.sleepState}`);
+  assert.equal(p.body.sleepState, CANNON.Body.SLEEPING);
+});
+
+test('physics step cost stays within budget on the real island', () => {
+  const t = createTerrain(SEED);
+  const L = createLayout(t);
+  const phys = createPhysics(t);
+  for (const p of L.palms) phys.addObstacle({ x: p.x, z: p.z, r: 0.3, y0: p.y - 1, y1: p.y + 6, kind: 'wood' });
+  for (const r of L.rocks) phys.addObstacle({ x: r.x, z: r.z, r: r.s * 0.85, y0: r.y - 2, y1: r.y + r.s * 0.55, kind: 'rock' });
+  for (const p of L.props) phys.props.add(p.kind, p.x, p.z, { tether: p.tether, color: p.color });
+  phys.car.reset(L.spawn.x, L.spawn.z, L.spawn.heading);
+  phys.car.input.throttle = 1; phys.car.input.steer = 0.2;
+  for (let k = 0; k < 300; k++) phys.update(1 / 60);
+  const t0 = performance.now();
+  for (let k = 0; k < 600; k++) phys.update(1 / 60);
+  const ms = (performance.now() - t0) / 600;
+  console.log(`  ${ms.toFixed(2)} ms per 60 Hz frame (physics + ripples)`);
+  assert.ok(ms < 4);
 });

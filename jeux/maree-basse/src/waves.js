@@ -81,8 +81,10 @@ export function createWaves(terrain, { n = 128, cell = 0.5 } = {}) {
     return true;
   };
 
+  W.quiet = 0; // frames with no energy; the sim idles until disturbed again
   W.step = function (dt) {
     W.time += dt;
+    if (W.quiet > 30) return;
     const inv = 1 / (cell * cell);
     const damp = Math.pow(0.6, dt); // per-second velocity damping factor
     const hdamp = Math.pow(0.75, dt);
@@ -102,6 +104,7 @@ export function createWaves(terrain, { n = 128, cell = 0.5 } = {}) {
       }
     }
     const fdec = Math.pow(0.42, dt);
+    let energy = 0;
     for (let k = 0; k < N * N; k++) {
       h[k] = (h[k] + v[k] * dt) * hdamp * sponge[k];
       const lo = -c2[k] * 0.055; // about 55% of the local depth (c2 = g*d)
@@ -109,11 +112,15 @@ export function createWaves(terrain, { n = 128, cell = 0.5 } = {}) {
       const agit = Math.abs(v[k]);
       const f = foam[k] * fdec + (agit > 0.45 ? (agit - 0.45) * dt * 1.2 : 0);
       foam[k] = f > 1 ? 1 : f;
+      const e = agit + (h[k] < 0 ? -h[k] : h[k]) + f;
+      if (e > energy) energy = e;
     }
+    W.quiet = energy < 2e-4 ? W.quiet + 1 : 0;
   };
 
   // Push water: adds a gaussian velocity impulse (negative = depression)
   W.disturb = function (x, z, amount, radius = 1) {
+    W.quiet = 0;
     const ci = (x - W.ox) / cell, cj = (z - W.oz) / cell;
     const rr = Math.max(1, radius / cell);
     const r0 = Math.ceil(rr * 1.8);
@@ -129,6 +136,7 @@ export function createWaves(terrain, { n = 128, cell = 0.5 } = {}) {
     }
   };
   W.addFoam = function (x, z, amount, radius = 1) {
+    W.quiet = 0;
     const ci = (x - W.ox) / cell, cj = (z - W.oz) / cell;
     const rr = Math.max(1, radius / cell);
     const r0 = Math.ceil(rr * 1.5);

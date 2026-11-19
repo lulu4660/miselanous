@@ -29,26 +29,27 @@ const drive = (thr, steer, hb = false) => page.evaluate(([a, b, c]) => { window.
 // override input each frame from the test
 await page.evaluate(() => {
   const mb = window.__mb;
-  const orig = mb.car.step;
-  mb.car.step = function (dt) { if (window.__mbDrive) { mb.car.input.throttle = window.__mbDrive.a; mb.car.input.steer = window.__mbDrive.b; mb.car.input.handbrake = window.__mbDrive.c; } return orig.call(this, dt); };
+  const orig = mb.car.preStep;
+  mb.car.preStep = function (dt) { if (window.__mbDrive) { mb.car.input.throttle = window.__mbDrive.a; mb.car.input.steer = window.__mbDrive.b; mb.car.input.handbrake = window.__mbDrive.c; mb.car.input.brake = 0; } return orig.call(this, dt); };
 });
 if (scenario === 'title') { await wait(2500); await snap('title'); }
 else if (scenario.startsWith('touch')) {
-  // drive with the on-screen joystick (pointer events) and the handbrake button
+  // drive with the pedals + steering bar (CDP touches)
   await wait(800); await snap('touch_ui');
-  const box = await page.locator('#zone').boundingBox();
-  const sx = box.x + box.width * 0.4, sy = box.y + box.height * 0.7;
-  await page.mouse.move(sx, sy); await page.mouse.down();
-  await page.mouse.move(sx, sy - 70, { steps: 5 });
+  const cdp = await page.context().newCDPSession(page);
+  const T = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts });
+  const g = await page.locator('#gasP').boundingBox(), wbb = await page.locator('#wheel').boundingBox();
+  const gx = g.x + g.width / 2, gy = g.y + g.height / 2;
+  await T('touchStart', [{ x: gx, y: gy, id: 1 }]);
   await wait(2500);
   const a = await page.evaluate(() => ({ v: window.__mb.car.forwardSpeed, thr: window.__mb.car.input.throttle, steer: window.__mb.car.input.steer }));
-  console.log('thumb held ->', JSON.stringify(a));
-  await page.mouse.move(sx + 70, sy - 20, { steps: 5 });
+  console.log('gas held ->', JSON.stringify(a));
+  await T('touchStart', [{ x: gx, y: gy, id: 1 }, { x: wbb.x + wbb.width - 12, y: wbb.y + wbb.height / 2, id: 2 }]);
   await wait(1200);
   const b = await page.evaluate(() => ({ v: window.__mb.car.forwardSpeed, thr: window.__mb.car.input.throttle, steer: window.__mb.car.input.steer }));
-  console.log('thumb slid right ->', JSON.stringify(b));
+  console.log('gas + right ->', JSON.stringify(b));
   await snap('touch_drive');
-  await page.mouse.up();
+  await T('touchEnd', []);
   await wait(300);
   const c = await page.evaluate(() => ({ thr: window.__mb.car.input.throttle, steer: window.__mb.car.input.steer }));
   console.log('released ->', JSON.stringify(c));
@@ -98,7 +99,7 @@ else if (scenario.startsWith('controls')) {
       if (ok) return { x, z, a };
     }
   });
-  const resetSpot = () => page.evaluate((s) => { const mb = window.__mb; mb.car.reset(s.x, s.z, s.a); for (const o of mb.phys.obstacles) if (Math.hypot(o.x - s.x, o.z - s.z) < 70) o.y1 = -99; }, spot);
+  const resetSpot = () => page.evaluate((s) => { const mb = window.__mb; mb.car.reset(s.x, s.z, s.a); mb.phys.disableObstaclesNear(s.x, s.z, 70); }, spot);
   const ctr = async (sel) => { const r = await page.locator(sel).boundingBox(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, r }; };
   const gas = await ctr('#gasP'), brk = await ctr('#brakeP'), wh = await ctr('#wheel');
   await resetSpot(); await simWait(1.5);

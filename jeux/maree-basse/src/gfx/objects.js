@@ -113,8 +113,9 @@ export function createPropMeshes(props, scene) {
     sync() {
       for (const g of groups.values()) {
         g.items.forEach((p, i) => {
-          q.set(p.q.x, p.q.y, p.q.z, p.q.w);
-          pos.set(p.pos.x, p.pos.y + (p.kind === 'ring' ? -0.33 : 0), p.pos.z);
+          const rq = p.rq || p.q, rp = p.rpos || p.pos;
+          q.set(rq.x, rq.y, rq.z, rq.w);
+          pos.set(rp.x, rp.y + (p.visualOffsetY ?? (p.kind === 'ring' ? -0.33 : 0)), rp.z);
           m.compose(pos, q, one);
           g.mesh.setMatrixAt(i, m);
         });

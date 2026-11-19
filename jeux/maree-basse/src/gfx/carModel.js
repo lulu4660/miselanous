@@ -238,8 +238,9 @@ export function createCarModel() {
   return {
     root, body, wheels, brakeMat,
     sync(car, dt) {
-      body.position.set(car.pos.x, car.pos.y, car.pos.z);
-      body.quaternion.set(car.q.x, car.q.y, car.q.z, car.q.w);
+      const rp = car.rpos || car.pos, rq = car.rq || car.q;
+      body.position.set(rp.x, rp.y, rp.z);
+      body.quaternion.set(rq.x, rq.y, rq.z, rq.w);
       for (let i = 0; i < 4; i++) {
         const W = wheels[i], cw = car.wheels[i];
         const len = cw.suspLen; // anchor -> wheel centre distance along body -y
