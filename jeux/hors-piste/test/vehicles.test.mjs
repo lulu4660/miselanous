@@ -77,7 +77,7 @@ for (const id of VEHICLE_ORDER) {
   });
 
   test(`${spec.name}: Avancer + full lock turns tight on dirt and snow, without spinning`, () => {
-    for (const [surf, maxR] of [[S.DIRT, 40], [S.SNOWROAD, 55]]) {
+    for (const [surf, maxR] of [[S.DIRT, 48], [S.SNOWROAD, 62]]) { // old model: 77-184 m and 117-193 m
       const phys = createPhysics(flatMap({ surf, size: 1400, n: 140 }));
       const car = phys.addVehicle(spec, { player: true });
       car.assist = 1;

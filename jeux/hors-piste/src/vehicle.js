@@ -330,11 +330,12 @@ export function createVehicle(world, map, spec, material) {
   const tyreGrip = [1, 1, 1, 1], tyreFx = [0, 0, 0, 0], tyreBrake = [false, false, false, false], tyreSlip = [0, 0, 0, 0];
   const fw = new CANNON.Vec3(), lw = new CANNON.Vec3(), vc = new CANNON.Vec3(), rp = new CANNON.Vec3(), Jt = new CANNON.Vec3();
   let latSpeed = 1, frontG = 0;
+  const pendJ = Array.from({ length: 8 }, () => new CANNON.Vec3()), pendP = Array.from({ length: 8 }, () => new CANNON.Vec3());
   function tyres(dt) {
     updateR();
     // arcade: more cornering grip as speed rises, so fast bends stay drivable
     latSpeed = 1 + 0.35 * Math.min(1, Math.max(0, (car.speed - 12) / 23));
-    let gF = 0;
+    let gF = 0, nPend = 0;
     F.set(R[2], R[5], R[8]); L.set(R[0], R[3], R[6]); U.set(R[1], R[4], R[7]);
     for (let i = 0; i < 4; i++) {
       const wi = vehicle.wheelInfos[i], cw = car.wheels[i];
@@ -378,17 +379,18 @@ export function createVehicle(world, map, spec, material) {
       // drive/brake below the axle (the body dives and squats, damped like the anti-dive /
       // anti-squat geometry of real suspensions), side force with its height scaled down
       // (Bullet's roll influence: fewer rollovers)
+      // (all four wheels see the same body state: impulses are queued and applied together,
+      // applying them one by one gave the car a pull toward the first wheel's side)
       const h0 = rp.dot(U);
       let up = h0 * (TY.antiPitch ?? 0.55);
       rp.set(rp.x - U.x * up, rp.y - U.y * up, rp.z - U.z * up);
-      Jt.set(fw.x * jx, fw.y * jx, fw.z * jx);
-      chassis.applyImpulse(Jt, rp);
+      pendJ[nPend].set(fw.x * jx, fw.y * jx, fw.z * jx); pendP[nPend++].copy(rp);
       up = h0 * (1 - spec.rollInfluence) - up;
       rp.set(rp.x - U.x * up, rp.y - U.y * up, rp.z - U.z * up);
-      Jt.set(lw.x * jy, lw.y * jy, lw.z * jy);
-      chassis.applyImpulse(Jt, rp);
-      tyreSlip[i] = Math.max(spin * 0.5, a > ap * 0.75 ? Math.min(1, (a - ap * 0.75) / 0.3) : 0, inp_handbrakeRear(cw) ? 0.7 : 0);
+      pendJ[nPend].set(lw.x * jy, lw.y * jy, lw.z * jy); pendP[nPend++].copy(rp);
+      tyreSlip[i] = Math.max(spin * 0.3, a > ap * 0.75 ? Math.min(1, (a - ap * 0.75) / 0.3) : 0, inp_handbrakeRear(cw) ? 0.7 : 0);
     }
+    for (let k = 0; k < nPend; k++) chassis.applyImpulse(pendJ[k], pendP[k]);
     frontG = gF;
   }
   const inp_handbrakeRear = (cw) => car.input.handbrake && !cw.front && Math.abs(car.forwardSpeed) > 2;
