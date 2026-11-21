@@ -51,19 +51,23 @@ else if (scenario === 'drive' || scenario === 'touch') {
     const g = await page.locator('#gasP').boundingBox(), wbb = await page.locator('#wheel').boundingBox(), b = await page.locator('#brakeP').boundingBox();
     const gx = g.x + g.width / 2, gy = g.y + g.height / 2;
     console.log('idle ->', JSON.stringify(await state()));
+    const bx = b.x + b.width / 2, by = b.y + b.height / 2;
+    const st2 = () => page.evaluate(() => { const c = window.__mb.car; return `v=${c.forwardSpeed.toFixed(1)} thr=${c.input.throttle} grounded=${c.groundedCount} y=${c.pos.y.toFixed(1)} roadD=${window.__mb.world.roadDistAt(c.pos.x, c.pos.z).toFixed(1)}`; });
     await T('touchStart', [{ x: gx, y: gy, id: 1 }]);
-    await wait(3000);
-    console.log('gas held ->', JSON.stringify(await state()));
+    await wait(2500);
+    console.log('gas held 2.5 s ->', await st2());
+    await T('touchEnd', []);
+    await T('touchStart', [{ x: bx, y: by, id: 3 }]);
+    for (let k = 0; k < 9; k++) { await wait(500); console.log(`  brake ${(k + 1) * 0.5}s ->`, await st2()); }
+    await T('touchEnd', []);
+    await wait(500);
+    console.log('released ->', JSON.stringify(await state()));
+    await T('touchStart', [{ x: gx, y: gy, id: 1 }]);
+    await wait(1500);
     await T('touchStart', [{ x: gx, y: gy, id: 1 }, { x: wbb.x + wbb.width - 14, y: wbb.y + wbb.height / 2, id: 2 }]);
-    await wait(1000);
+    await wait(800);
     console.log('gas + right ->', JSON.stringify(await state()));
     await snap('touch_drive');
-    await T('touchEnd', []);
-    await wait(400);
-    console.log('released ->', JSON.stringify(await state()));
-    await T('touchStart', [{ x: b.x + b.width / 2, y: b.y + b.height / 2, id: 3 }]);
-    await wait(3500);
-    console.log('brake held (should reverse) ->', JSON.stringify(await state()));
     await T('touchEnd', []);
   } else {
     await page.evaluate(() => { const mb = window.__mb; window.__ev = []; const ev = mb.phys.events; const push = ev.push.bind(ev); ev.push = (...a) => { for (const e of a) if (e.car === mb.car && e.type !== 'propBump') window.__ev.push(`${mb.phys.time.toFixed(2)} ${e.type} ${(e.intensity || 0).toFixed(2)} ${e.kind || ''} up=${mb.car.R[4].toFixed(2)} v=${mb.car.forwardSpeed.toFixed(1)}`); return push(...a); }; });
@@ -106,6 +110,22 @@ else if (scenario === 'traffic') {
   console.log('traffic ->', JSON.stringify(t));
   await snap('traffic');
   await page.keyboard.up('ArrowUp');
+  await page.evaluate(() => window.__mb.setView('high'));
+  await wait(1500);
+  const proj = await page.evaluate(() => {
+    const mb = window.__mb; const THREE_V = mb.camera.position.clone();
+    return mb.traffic.cars.map((c) => { const v = THREE_V.clone().set(c.rpos.x, c.rpos.y, c.rpos.z).project(mb.camera); return { active: c.active, sx: Math.round((v.x * 0.5 + 0.5) * innerWidth), sy: Math.round((-v.y * 0.5 + 0.5) * innerHeight), inFront: v.z < 1, posVsRpos: +Math.hypot(c.pos.x - c.rpos.x, c.pos.z - c.rpos.z).toFixed(2) }; });
+  });
+  console.log('projected ->', JSON.stringify(proj));
+  await snap('traffic_high');
+  // in-car view, upright, for two bodies
+  for (const id of ['cabri', 'mistral']) {
+    await page.evaluate((id) => { const mb = window.__mb; mb.swapCar(id, 0); mb.setView('bonnet'); }, id);
+    await page.keyboard.down('ArrowUp'); await wait(1500); await page.keyboard.up('ArrowUp');
+    console.log('bonnet', id, await page.evaluate(() => window.__mb.car.R[4].toFixed(2)));
+    await snap(`bonnet_${id}`);
+  }
+  await page.evaluate(() => window.__mb.setView('cinema')); await wait(1200); await snap('cinema');
 }
 else if (scenario === 'perf') {
   await page.keyboard.down('ArrowUp');

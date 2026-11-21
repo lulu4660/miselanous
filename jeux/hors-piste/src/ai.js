@@ -35,7 +35,7 @@ export function createDriver(car, road, { lane = 2.2, skill = 0.85, startIdx = 0
       const turn = Math.abs(wrap(Math.atan2(b.tx, b.tz) - Math.atan2(a.tx, a.tz))) / 8; // rad per metre
       if (turn < 1e-4) continue;
       const R = 1 / turn;
-      const mu = ROAD_MU[a.type] * spec.grip[[0, S.ASPHALT, S.DIRT, S.SNOWROAD][a.type]] * 0.54;
+      const mu = ROAD_MU[a.type] * spec.grip[[0, S.ASPHALT, S.DIRT, S.SNOWROAD][a.type]] * 0.54 * (spec.aiGrip ?? 1); // aiGrip: tall/light cars corner below their tyre grip
       const v = Math.sqrt(mu * 9.81 * R) * (0.78 + 0.22 * skill);
       const decel = Math.min(spec.brakeDecel, mu * 9.81 * 1.3) * 0.55; // what this surface can really stop
       // crests: keep the wheels on the ground (v² < g·R_vertical)

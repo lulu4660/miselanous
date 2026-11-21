@@ -181,9 +181,9 @@ export function createVegetation(world, quality) {
     return { x, z, y: world.heightAt(x, z) - 0.1, s: 0.8 + rnd() * 0.6, rot: rnd() * 6.28 };
   });
   const rocks = pick(quality.trees * 0.4, 40000, (x, z) => {
-    if (!free(x, z, 7)) return null;
-    world.biomeWeights(x, z, bw);
     const s = 0.5 + rnd() * rnd() * 2.4;
+    if (!free(x, z, 7.5 + s * 1.2)) return null; // big rocks keep clear of the carriageway
+    world.biomeWeights(x, z, bw);
     return { x, z, y: world.heightAt(x, z) - s * 0.3, s, rot: rnd() * 6.28, tilt: (rnd() - 0.5) * 0.5, sy: s * (0.6 + rnd() * 0.5), biome: bw.indexOf(Math.max(...bw)) };
   });
   const bushes = pick(quality.trees * 0.5, 30000, (x, z) => {
@@ -194,7 +194,7 @@ export function createVegetation(world, quality) {
   });
 
   const veg = (o) => patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, ...o }), { wind: 0.0012, cutout: 1 });
-  const add = (geo, mat, list, opts) => { const g = chunkedInstances(geo, mat, list, { chunk: 60, ...opts }); group.add(g); return g; };
+  const add = (geo, mat, list, opts) => { const g = chunkedInstances(geo, mat, list, { chunk: 80, ...opts }); group.add(g); return g; };
   const pineMat = veg({ flatShading: true });
   add(pineGeo(rnd, true), pineMat, pinesSnow, { cast: true });
   add(pineGeo(rnd, false), pineMat, pinesGreen, { cast: true });
@@ -258,9 +258,9 @@ export function createVegetation(world, quality) {
       }
     }
   }
-  add(reflector, postMat, posts[1], { chunk: 60 });
-  add(fencePost, postMat, posts[2], { chunk: 60 });
-  add(snowPole, postMat, posts[3], { chunk: 60 });
+  add(reflector, postMat, posts[1], { chunk: 80 });
+  add(fencePost, postMat, posts[2], { chunk: 80 });
+  add(snowPole, postMat, posts[3], { chunk: 80 });
 
   for (const it of [...pinesSnow, ...pinesGreen]) obstacles.push({ x: it.x, z: it.z, r: 0.3 * it.s + 0.1, y0: it.y - 1, y1: it.y + 6, kind: 'wood' });
   for (const it of trees) obstacles.push({ x: it.x, z: it.z, r: 0.32 * it.s + 0.1, y0: it.y - 1, y1: it.y + 4, kind: 'wood' });

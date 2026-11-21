@@ -189,6 +189,7 @@ async function boot() {
   };
   const openGarage = () => {
     game.mode = 'garage'; input.enabled = false; input.reset?.();
+    $('hud').classList.remove('on');
     document.body.classList.remove('playing');
     $('garage').hidden = false; requestAnimationFrame(() => $('garage').classList.remove('gone'));
     $('menu').hidden = true; $('btnMenu').setAttribute('aria-expanded', 'false');
@@ -223,9 +224,13 @@ async function boot() {
     for (const r of world.roads) for (let i = 0; i < r.pts.length; i += 2) { const p = r.pts[i]; const d = (p.x - x) ** 2 + (p.z - z) ** 2; if (d < bd) { bd = d; best = p; } }
     return best;
   }
+  let respawning = false;
   function respawnOnRoad(msg) {
+    if (respawning) return;
+    respawning = true;
     $('fade').classList.add('on');
     setTimeout(() => {
+      respawning = false;
       const p = nearestRoadPoint(car.pos.x, car.pos.z);
       const yaw = car.headingYaw();
       let h = Math.atan2(p.tx, p.tz);
@@ -242,9 +247,10 @@ async function boot() {
   const VIEWS = {
     chase: { label: 'Poursuite', p: { dist: 9.5, hgt: 4.4, look: 5, lookY: 0.9, fov: 62 }, l: { dist: 8.5, hgt: 3.4, look: 4, lookY: 0.8, fov: 50 } },
     high: { label: 'Plongée', p: { dist: 20, hgt: 30, look: 7, lookY: 0.3, fov: 52 }, l: { dist: 14, hgt: 24, look: 2, lookY: 0.3, fov: 38 } },
+    cinema: { label: 'Cinéma', p: { dist: 12, hgt: 3.0, look: 0.3, lookY: 0.9, fov: 60, side: 0.85 }, l: { dist: 9, hgt: 2.2, look: 0.4, lookY: 0.8, fov: 46, side: 0.95 } },
     bonnet: { label: 'Embarquée', p: { dist: -0.4, hgt: 1.35, look: 30, lookY: 0.7, fov: 70 }, l: { dist: -0.4, hgt: 1.25, look: 30, lookY: 0.7, fov: 58 } },
   };
-  const VIEW_ORDER = ['chase', 'high', 'bonnet'];
+  const VIEW_ORDER = ['chase', 'high', 'cinema', 'bonnet'];
   let view = VIEWS[store.get('hp-cam')] ? store.get('hp-cam') : 'chase';
   const cam = { yaw: sp.heading, target: new THREE.Vector3(car.pos.x, car.pos.y, car.pos.z), pos: new THREE.Vector3(), shake: 0, snap: true, roll: 0, offX: 0, offY: 0 };
   const garageCard = document.querySelector('#garage .card'), garageHead = document.querySelector('#garage .head');
@@ -287,10 +293,11 @@ async function boot() {
     const V = portrait ? VIEWS[view].p : VIEWS[view].l;
     if (view === 'bonnet') {
       cam.yaw = carYaw;
-      localP.x = 0; localP.y = car.spec.box.maxY + 0.16; localP.z = car.spec.box.maxZ * 0.12;
+      const bx = car.spec.box, camY = bx.minY + (bx.maxY - bx.minY) * 0.5;
+      localP.x = 0; localP.y = camY; localP.z = bx.maxZ - 0.3; // bumper cam, just inside the nose (single-sided shell is invisible from within)
       car.body.pointToWorldFrame(localP, worldP);
       camera.position.set(worldP.x, worldP.y, worldP.z);
-      localP.y = car.spec.box.maxY - 0.5; localP.z = V.look;
+      localP.y = camY - 0.25; localP.z = V.look;
       car.body.pointToWorldFrame(localP, worldP);
       cam.target.set(worldP.x, worldP.y, worldP.z);
       camera.up.set(car.R[1], car.R[4], car.R[7]);
@@ -309,12 +316,13 @@ async function boot() {
     const prevYaw = cam.yaw;
     cam.yaw += wrapAngle(wantYaw - cam.yaw) * (cam.snap ? 1 : k);
     const yawRate = wrapAngle(cam.yaw - prevYaw) / Math.max(dt, 1e-3);
-    const look = V.look + spd * (view === 'high' ? 0.35 : 0.2);
+    const look = V.look + spd * (view === 'high' ? 0.35 : view === 'cinema' ? 0.04 : 0.2);
     tmpV.set(cp.x + Math.sin(cam.yaw) * look, cp.y + V.lookY, cp.z + Math.cos(cam.yaw) * look);
     if (cam.snap) cam.target.copy(tmpV); else cam.target.lerp(tmpV, 1 - Math.exp(-dt * 8));
     const dist = V.dist + spd * (view === 'high' ? 0.22 : 0.09);
     const hgt = V.hgt + spd * (view === 'high' ? 0.3 : 0.025);
-    desired.set(cp.x - Math.sin(cam.yaw) * dist, cp.y + hgt, cp.z - Math.cos(cam.yaw) * dist);
+    const ca = cam.yaw + Math.PI + (V.side || 0);
+    desired.set(cp.x + Math.sin(ca) * dist, cp.y + hgt, cp.z + Math.cos(ca) * dist);
     let gh = world.heightAt(desired.x, desired.z);
     gh = Math.max(gh, world.heightAt((desired.x + cp.x) / 2, (desired.z + cp.z) / 2) - hgt * 0.3);
     if (desired.y < gh + 1.5) desired.y = gh + 1.5;
@@ -357,13 +365,14 @@ async function boot() {
   const FOG = { snow: new THREE.Color('#cdd7ea'), asph: new THREE.Color('#e3d6c0'), dirt: new THREE.Color('#efc6a2') };
   const fogTarget = new THREE.Color(), bwCam = [0, 0, 0];
   const SKY_HORIZON = { snow: new THREE.Color('#d9e2f2'), asph: new THREE.Color('#ffd9b4'), dirt: new THREE.Color('#ffc69e') };
+  const skyTarget = new THREE.Color();
+  const mix3 = (out, C, w) => out.setRGB(C.snow.r * w[0] + C.asph.r * w[1] + C.dirt.r * w[2], C.snow.g * w[0] + C.asph.g * w[1] + C.dirt.g * w[2], C.snow.b * w[0] + C.asph.b * w[1] + C.dirt.b * w[2]);
   function updateMood(dt) {
     world.biomeWeights(camera.position.x, camera.position.z, bwCam);
-    fogTarget.setRGB(0, 0, 0)
-      .add(FOG.snow.clone().multiplyScalar(bwCam[0])).add(FOG.asph.clone().multiplyScalar(bwCam[1])).add(FOG.dirt.clone().multiplyScalar(bwCam[2]));
+    mix3(fogTarget, FOG, bwCam);
     scene.fog.color.lerp(fogTarget, Math.min(1, dt * 1.5));
     const hz = sky.dome.material.uniforms.cHorizon?.value;
-    if (hz) { const t = new THREE.Color(0, 0, 0).add(SKY_HORIZON.snow.clone().multiplyScalar(bwCam[0])).add(SKY_HORIZON.asph.clone().multiplyScalar(bwCam[1])).add(SKY_HORIZON.dirt.clone().multiplyScalar(bwCam[2])); hz.lerp(t, Math.min(1, dt * 1.5)); }
+    if (hz) hz.lerp(mix3(skyTarget, SKY_HORIZON, bwCam), Math.min(1, dt * 1.5));
     if (post?.passes?.grade) {
       const g = post.passes.grade.uniforms;
       g.uShadow.value.setRGB(0.5 + 0.1 * bwCam[0], 0.52 + 0.08 * bwCam[0], 0.84 + 0.1 * bwCam[0]);
@@ -500,7 +509,7 @@ async function boot() {
     }
     if (post && fxLevel > 0) {
       tmpV.set(car.pos.x, car.pos.y + 0.5, car.pos.z).project(camera);
-      post.setFocus(Math.max(0.15, Math.min(0.85, tmpV.y * 0.5 + 0.5)));
+      post.setFocus(view === 'bonnet' && game.mode === 'play' ? 0.5 : Math.max(0.15, Math.min(0.85, tmpV.y * 0.5 + 0.5)));
       post.render(dt);
       if (post.broken && fxLevel) { fxLevel = 0; setMenuStates(); }
     } else renderer.render(scene, camera);

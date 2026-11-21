@@ -160,6 +160,7 @@ export function createPhysics(map) {
 
   phys.update = function (frameDt) {
     const before = world.stepnumber;
+    props.stream(cars);
     world.step(STEP, Math.min(frameDt, 0.1), 6);
     streamStatics(false, Math.min(frameDt, 0.1));
     phys.time = world.stepnumber * STEP;

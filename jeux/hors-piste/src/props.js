@@ -59,13 +59,18 @@ export function createProps(world, map, M) {
   };
 
   // props only live in the cannon world near an active car
-  P.preStep = function (dt, cars) {
-    P.time += dt;
+  // (called between world steps: adding/removing bodies inside a step breaks cannon's loops)
+  P.stream = function (cars) {
     for (const p of list) {
       let near = false;
       for (const c of cars) if (c.active && (c.pos.x - p.pos.x) ** 2 + (c.pos.z - p.pos.z) ** 2 < 70 * 70) { near = true; break; }
       if (near && !p.inWorld) { world.addBody(p.body); p.inWorld = true; p.body.wakeUp(); }
       else if (!near && p.inWorld && p.body.sleepState === CANNON.Body.SLEEPING) { world.removeBody(p.body); p.inWorld = false; }
+    }
+  };
+  P.preStep = function (dt) {
+    P.time += dt;
+    for (const p of list) {
       if (p.inWorld && p.pos.y < map.heightAt(p.pos.x, p.pos.z) - 2) { // fell through: put it back on top
         p.pos.y = map.heightAt(p.pos.x, p.pos.z) + p.K.half + 0.1; p.vel.set(0, 0, 0);
       }

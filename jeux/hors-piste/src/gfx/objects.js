@@ -87,9 +87,9 @@ export function placeRoadProps(world, props) {
       // outside of bends gets markers
       if (Math.abs(turn) > 0.35 && i % 6 === 0) {
         const side = turn > 0 ? 1 : -1; // turning left -> outside is the right
-        const off = 6.2 + rnd() * 0.8;
+        const off = 7.0 + rnd() * 0.9; // clear of a car running a little wide
         const x = p.x - p.tz * off * side, z = p.z + p.tx * off * side;
-        if (world.roadDistAt(x, z) < 5.4) continue;
+        if (world.roadDistAt(x, z) < 6.2) continue;
         const kind = p.type === ROAD_TYPE.ASPHALT ? 'cone' : p.type === ROAD_TYPE.DIRT ? (rnd() < 0.7 ? 'hay' : 'tyres') : (rnd() < 0.5 ? 'snowman' : 'barrel');
         props.add(kind, x, z, { yaw: Math.atan2(p.tx, p.tz) });
       }
