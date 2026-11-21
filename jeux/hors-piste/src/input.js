@@ -117,6 +117,8 @@ export function createInput({ wheel, wheelKnob, pedals, gas, brake, horn }) {
   window.addEventListener('keydown', (e) => {
     const k = KEYMAP[e.code];
     if (!k) return;
+    // in menus, let Space / arrows act on the focused button
+    if (!state.enabled && e.target instanceof Element && e.target.closest('button')) return;
     e.preventDefault();
     state.keys.add(k);
     first();

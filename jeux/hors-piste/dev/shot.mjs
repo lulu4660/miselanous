@@ -98,6 +98,23 @@ else if (scenario === 'biomes') {
     await snap(`biome_${t}`);
   }
 }
+else if (scenario === 'drift') {
+  // full throttle then a held arrow on the dirt and on the snow: the car should rotate and slide
+  const spots = await page.evaluate(() => {
+    const w = window.__mb.world, res = {};
+    for (const r of w.roads) for (let i = 0; i < r.pts.length; i += 40) { const p = r.pts[i]; if (!res[p.type]) res[p.type] = { x: p.x + p.tz * 2.2, z: p.z - p.tx * 2.2, h: Math.atan2(p.tx, p.tz) }; }
+    return res;
+  });
+  for (const [t, s] of Object.entries(spots)) {
+    await page.evaluate((s) => { const mb = window.__mb; mb.phys.resetCar(mb.car, s.x, s.z, s.h); }, s);
+    await page.keyboard.down('ArrowUp'); await wait(2200);
+    await page.keyboard.down('ArrowLeft'); await wait(900);
+    const st = await page.evaluate(() => { const c = window.__mb.car; return { v: +c.forwardSpeed.toFixed(1), beta: Math.round(c.beta * 57.3), steer: +c.steer.toFixed(2), surf: c.surface, slipR: +c.wheels[2].slip.toFixed(2) }; });
+    console.log('drift', t, JSON.stringify(st));
+    await snap(`drift_${t}`);
+    await page.keyboard.up('ArrowLeft'); await page.keyboard.up('ArrowUp'); await wait(300);
+  }
+}
 else if (scenario === 'traffic') {
   // drop the player just behind an AI car and follow it
   await page.evaluate(() => {

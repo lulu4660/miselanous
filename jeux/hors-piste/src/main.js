@@ -114,7 +114,7 @@ async function boot() {
   const liveryFor = (id, k) => (k === 0 ? VEHICLES[id].livery : LIVERIES[(k - 1 + VEHICLE_ORDER.indexOf(id)) % LIVERIES.length]);
   let car = phys.addVehicle(VEHICLES[carId], { player: true });
   car.livery = liveryFor(carId, paint);
-  car.assist = 0.55;
+  car.assist = 1;
   let model = createVehicleModel(VEHICLES[carId], car.livery);
   scene.add(model.root);
   const sp = world.spawn;
@@ -127,7 +127,7 @@ async function boot() {
     carId = id; paint = k;
     car = phys.addVehicle(VEHICLES[id], { player: true });
     car.livery = liveryFor(id, k);
-    car.assist = 0.55;
+    car.assist = 1;
     model = createVehicleModel(VEHICLES[id], car.livery);
     scene.add(model.root);
     phys.resetCar(car, pos.x, pos.z, pos.h);
@@ -196,7 +196,7 @@ async function boot() {
     gIdx = VEHICLE_ORDER.indexOf(carId); gPaint = paint; renderGarage();
   };
   $('go').addEventListener('click', (e) => { e.currentTarget.blur(); start(); });
-  window.addEventListener('keydown', (e) => { if (game.mode === 'garage' && e.code === 'Enter') { e.preventDefault(); start(); } });
+  window.addEventListener('keydown', (e) => { if (game.mode === 'garage' && e.code === 'Enter' && !(e.target instanceof Element && e.target.closest('button'))) { e.preventDefault(); start(); } });
   window.addEventListener('pointerdown', () => { if (game.mode === 'play') audio.unlock(); }, { passive: true });
 
   // menu
@@ -225,21 +225,29 @@ async function boot() {
     return best;
   }
   let respawning = false;
+  const lastGood = { x: world.spawn.x, z: world.spawn.z, h: world.spawn.heading };
   function respawnOnRoad(msg) {
     if (respawning) return;
     respawning = true;
     $('fade').classList.add('on');
     setTimeout(() => {
       respawning = false;
-      const p = nearestRoadPoint(car.pos.x, car.pos.z);
-      const yaw = car.headingYaw();
-      let h = Math.atan2(p.tx, p.tz);
-      if (Math.cos(wrapAngle(h - yaw)) < 0) h += Math.PI;
-      phys.resetCar(car, p.x - Math.cos(h) * 2, p.z + Math.sin(h) * 2, h);
-      for (let i = 0; i < 4; i++) tracks.cut(i);
-      cam.snap = true;
-      $('fade').classList.remove('on');
-      if (msg) toast(msg, '', 1500);
+      try {
+        // a NaN'd body has no position left: fall back to the last sane one
+        const ok = Number.isFinite(car.pos.x + car.pos.z);
+        const p = nearestRoadPoint(ok ? car.pos.x : lastGood.x, ok ? car.pos.z : lastGood.z) || world.loop.pts[world.spawn.idx];
+        const yaw = ok ? car.headingYaw() : lastGood.h;
+        let h = Math.atan2(p.tx, p.tz);
+        if (Math.cos(wrapAngle(h - yaw)) < 0) h += Math.PI;
+        // the road's left lane (traffic keeps to the right one), whichever way we face
+        phys.resetCar(car, p.x + p.tz * 2.2, p.z - p.tx * 2.2, h);
+        if (!Number.isFinite(car.pos.x + car.pos.y + car.pos.z)) phys.resetCar(car, world.spawn.x, world.spawn.z, world.spawn.heading);
+        for (let i = 0; i < 4; i++) tracks.cut(i);
+        cam.snap = true;
+        if (msg) toast(msg, '', 1500);
+      } finally {
+        $('fade').classList.remove('on');
+      }
     }, 320);
   }
 
@@ -273,7 +281,9 @@ async function boot() {
       const W = window.innerWidth, H = window.innerHeight;
       const card = garageCard.getBoundingClientRect(), head = garageHead.getBoundingClientRect();
       let fx = W / 2, fy = H / 2, freeH = H;
-      if (portrait) { fy = (head.bottom + card.top) / 2; freeH = Math.max(80, card.top - head.bottom); }
+      // card beside the heading (short landscape) or below it (portrait, tall landscape)
+      const side = card.left > W * 0.45 && card.top < H * 0.45;
+      if (!side) { fy = (head.bottom + card.top) / 2; freeH = Math.max(80, card.top - head.bottom); }
       else { fx = card.left / 2; fy = (head.bottom + H) / 2; freeH = H - head.bottom; }
       const offX = W / 2 - fx, offY = H / 2 - fy;
       if (Math.abs(offX - cam.offX) > 0.5 || Math.abs(offY - cam.offY) > 0.5) { cam.offX = offX; cam.offY = offY; camera.setViewOffset(W, H, offX, offY, W, H); }
@@ -442,7 +452,7 @@ async function boot() {
   window.__mbBooted = true;
 
   // ---------- loop
-  let last = performance.now(), hudT = 0, perfAcc = 0, perfN = 0, perfT = 0, fpsShown = 60, safeT = 0;
+  let last = performance.now(), hudT = 0, perfAcc = 0, perfN = 0, perfT = 0, fpsShown = 60;
   window.__mb = { phys, world, game, camera, renderer, scene, quality, traffic, post, get car() { return car; }, start, setFx: (n) => { fxLevel = n; post?.setLevel(n); }, setView: (v) => { view = v; cam.snap = true; }, swapCar };
 
   function frame(now) {
@@ -463,7 +473,7 @@ async function boot() {
     handleEvents();
     if (game.mode === 'play') {
       wheelEffects(dt, car, true);
-      safeT += dt;
+      if (car.groundedCount >= 2 && Number.isFinite(car.pos.x + car.pos.z)) { lastGood.x = car.pos.x; lastGood.z = car.pos.z; lastGood.h = car.headingYaw(); }
       if (car.pos.y < world.heightAt(car.pos.x, car.pos.z) - 5 || (car.flippedTime > 6) || Math.abs(car.pos.x) > world.half - 4 || Math.abs(car.pos.z) > world.half - 4) respawnOnRoad('Retour sur la route');
     }
 
