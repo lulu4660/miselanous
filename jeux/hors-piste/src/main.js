@@ -167,7 +167,10 @@ async function boot() {
   const pickGarage = (idx, k) => {
     gIdx = (idx + VEHICLE_ORDER.length) % VEHICLE_ORDER.length; gPaint = k;
     swapCar(VEHICLE_ORDER[gIdx], gPaint);
+    // the swatches are re-rendered: keep keyboard focus on the one that was used
+    const focusedPaint = document.activeElement?.closest?.('#paints button[data-k]')?.dataset.k;
     renderGarage();
+    if (focusedPaint !== undefined) $('paints').querySelector(`button[data-k="${focusedPaint}"]`)?.focus();
     audio.uiTap?.();
   };
   $('prevCar').addEventListener('click', () => pickGarage(gIdx - 1, 0));

@@ -110,7 +110,8 @@ export function createVehicle(world, map, spec, material) {
     chassis.previousPosition.copy(chassis.position); chassis.interpolatedPosition.copy(chassis.position);
     chassis.previousQuaternion.copy(chassis.quaternion); chassis.interpolatedQuaternion.copy(chassis.quaternion);
     car.steer = 0; car.steerIn = 0; car.steerHold = 0; car.flippedTime = 0; car.beta = 0; prevVelYaw = null; wv = 0;
-    for (const wi of vehicle.wheelInfos) { wi.suspensionLength = spec.restLength; wi.deltaRotation = 0; }
+    for (const wi of vehicle.wheelInfos) { wi.suspensionLength = spec.restLength; wi.deltaRotation = 0; if (!Number.isFinite(wi.rotation)) wi.rotation = 0; }
+    chassis.updateInertiaWorld(true); // a NaN'd body keeps a NaN inertia otherwise and blows up again
     updateR();
   };
   car.velocityAt = function (o, p) {
@@ -190,9 +191,14 @@ export function createVehicle(world, map, spec, material) {
     const vLeftF = vLeft + yawRate * frontZ;
     const thetaF = speedF > 0.5 ? Math.atan2(vLeftF, speedF) : 0;
     const apF = (TY.peak ?? 0.12) + 0.08 * LOOSE[car.surface];
-    const wSlip = Math.min(1, Math.max(0, (speedF - 4) / 5));
-    const geo = car.steerIn * st.max;
-    const slipSteer = thetaF + car.steerIn * apF * (st.bite ?? 1.15);
+    const wSlip = Math.min(1, Math.max(0, (speedF - 2) / 3));
+    // reversing: less lock as speed builds (a full-lock reverse at speed just spins the tail)
+    const geo = car.steerIn * st.max * (speedF < -1 ? Math.max(0.5, 1 - (-speedF - 1) / 12) : 1);
+    // the wheels only follow the travel direction while turning or once really sliding; with
+    // the arrow released and the car tracking straight they stay straight (a camber or a
+    // side slope must not steer the car)
+    const follow = Math.max(Math.abs(car.steerIn), Math.min(1, Math.max(0, (Math.abs(beta) - 0.07) / 0.13)));
+    const slipSteer = thetaF * follow + car.steerIn * apF * (st.bite ?? 1.15);
     car.steer = Math.max(-st.max, Math.min(st.max, geo + (slipSteer - geo) * wSlip));
     for (let i = 0; i < 4; i++) if (spec.wheels[i].front) vehicle.setSteeringValue(car.steer, i);
 
@@ -210,7 +216,7 @@ export function createVehicle(world, map, spec, material) {
       // cornering throttle assist: with the arrow held and the front tyres at their limit,
       // the engine eases off instead of pushing the car wide (stronger on tarmac)
       const sat = Math.min(1, Math.max(0, (frontG - 0.8) / 0.18)) * Math.abs(car.steerIn);
-      engineF *= 1 - (TY.cornerCut ?? 0.6) * sat * (1 - 0.5 * LOOSE[car.surface]);
+      engineF *= 1 - (TY.cornerCut ?? 0.6) * sat * (1 - 0.85 * LOOSE[car.surface]);
     } else if (drive < 0) {
       const k = Math.max(0, 1 - Math.pow(Math.max(0, -speedF) / spec.reverseSpeed, 2));
       engineF = drive * spec.engineForce * 0.55 * k;
@@ -252,10 +258,17 @@ export function createVehicle(world, map, spec, material) {
       vehicle.applyEngineForce(0, i);
       vehicle.setBrake(0, i);
     }
-    // parking hold: idle and slow -> cancel the along-track velocity
+    // parking hold: idle and slow -> cancel the along-track velocity, and the sideways creep
+    // too unless the slope is too steep to stand on
     if (Math.abs(thr) < 0.02 && Math.abs(speedF) < 1.2 && grounded >= 3) {
       F.scale(speedF, tmp);
       chassis.velocity.vsub(tmp, chassis.velocity);
+      // (and hold against the slope's pull for the coming step, or gravity re-adds the creep)
+      F.scale(spec.mass * G * F.y, tmp); chassis.force.vadd(tmp, chassis.force);
+      if (hspeed < 1.2 && U.y > 0.8) {
+        L.scale(chassis.velocity.dot(L), tmp); chassis.velocity.vsub(tmp, chassis.velocity);
+        L.scale(spec.mass * G * L.y, tmp); chassis.force.vadd(tmp, chassis.force);
+      }
     }
     // aero drag + downforce
     chassis.velocity.scale(-0.42 * hspeed, force);
@@ -275,7 +288,8 @@ export function createVehicle(world, map, spec, material) {
       const loose = LOOSE[car.surface];
       const r = chassis.angularVelocity.dot(U);
       let drift = (TY.drift ?? 0.36) * (0.12 + 0.88 * loose) * (car.driftScale ?? 1);
-      if (drive > 0) drift *= spec.drive === 'rwd' ? 1 + 0.25 * drive : 1 + 0.1 * drive; else drift *= 0.8;
+      if (drive > 0) drift *= 1 + 0.1 * drive; else drift *= 0.8;
+      drift *= Math.max(0.35, Math.min(1, (hspeed - 4) / 10)); // slow hairpins: a big angle only scrubs the speed away
       drift *= Math.max(0.45, Math.min(1, 1.3 - hspeed / 40)); // fast sweepers: smaller slides
       // handbrake: pivot now (hairpins), from the live steering rather than the held one
       const betaT = inp.handbrake ? -car.steerIn * Math.max(drift * 2, 0.8) : -car.steerHold * drift;
@@ -305,6 +319,7 @@ export function createVehicle(world, map, spec, material) {
   // angle up to a peak and falls a little beyond it (less on the front, more on the rear on
   // loose surfaces); longitudinal force shares the friction ellipse with it (power oversteer,
   // braking understeer). Each corner never gets more sideways impulse than stops it sliding.
+  const rwdRear = spec.wheels.map((w) => spec.drive === 'rwd' && !w.front);
   const tyreGrip = [1, 1, 1, 1], tyreFx = [0, 0, 0, 0], tyreBrake = [false, false, false, false], tyreSlip = [0, 0, 0, 0];
   const fw = new CANNON.Vec3(), lw = new CANNON.Vec3(), vc = new CANNON.Vec3(), rp = new CANNON.Vec3(), Jt = new CANNON.Vec3();
   let latSpeed = 1, frontG = 0;
@@ -341,7 +356,8 @@ export function createVehicle(world, map, spec, material) {
       // cornering has priority on the friction ellipse: what the tyre spends turning is taken
       // from traction/braking (a thumb holding Avancer through a bend no longer accelerates
       // out of it); wheelspin beyond what is left
-      const share = Math.sqrt(Math.max(0.09, 1 - g * g));
+      // (loose surfaces keep more drive: a held drift must not bog down)
+      const share = Math.sqrt(Math.max(0.09 + (rwdRear[i] ? 0.5 : 0.16) * loose, 1 - g * g));
       const fxCap = cap * (tyreBrake[i] ? Math.max(share, 0.45) : share);
       let fx = tyreFx[i], spin = 0;
       if (Math.abs(fx) > fxCap) { if (!tyreBrake[i]) spin = Math.min(1, (Math.abs(fx) - fxCap) / (fxCap + 1)); fx = Math.sign(fx) * fxCap * (tyreBrake[i] ? 1 : 0.92); }
