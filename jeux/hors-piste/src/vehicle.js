@@ -207,6 +207,10 @@ export function createVehicle(world, map, spec, material) {
     if (drive > 0) {
       const k = Math.max(0, 1 - Math.pow(Math.max(0, speedF) / spec.topSpeed, 2.2));
       engineF = speedF > spec.topSpeed ? 0 : drive * spec.engineForce * (0.32 + 0.68 * k);
+      // cornering throttle assist: with the arrow held and the front tyres at their limit,
+      // the engine eases off instead of pushing the car wide (stronger on tarmac)
+      const sat = Math.min(1, Math.max(0, (frontG - 0.8) / 0.18)) * Math.abs(car.steerIn);
+      engineF *= 1 - (TY.cornerCut ?? 0.6) * sat * (1 - 0.5 * LOOSE[car.surface]);
     } else if (drive < 0) {
       const k = Math.max(0, 1 - Math.pow(Math.max(0, -speedF) / spec.reverseSpeed, 2));
       engineF = drive * spec.engineForce * 0.55 * k;
@@ -230,13 +234,16 @@ export function createVehicle(world, map, spec, material) {
         const loose = LOOSE[cw.surf];
         // tarmac: a touch of understeer (safe); gravel/snow: the rear lets go first, the car rotates
         grip *= (TY.rearTarmac ?? 1.04) - ((TY.rearLoose ?? 0.12) + ((TY.rearTarmac ?? 1.04) - 1)) * loose;
-        if (drive > 0 && driven[i]) grip *= 1 - (TY.powerSlide ?? (spec.drive === 'rwd' ? 0.16 : 0.07)) * drive * (0.4 + 0.6 * loose); // power oversteer
+        if (drive > 0 && driven[i]) grip *= 1 - (TY.powerSlide ?? (spec.drive === 'rwd' ? 0.16 : 0.07)) * drive * (0.4 + 0.6 * loose) * Math.min(1, Math.max(0, (speedF - 3) / 9)); // power oversteer, not from rest
         if (inp.handbrake) grip *= 0.42;
       }
       let fx = engineF * torqueSplit[i] - Math.sign(speedF) * resist / 4;
       // braking keeps ~25% of the grip for steering (ABS-like); traction may use more
       if (wi.isInContact) {
-        const braking = fx * speedF < 0;
+        // braking = the force opposes the motion and is not the engine pulling away (a car at
+        // rest creeping back by a hair must still be able to drive off)
+        const engineDir = engineF * torqueSplit[i];
+        const braking = fx * speedF < 0 && !(engineDir !== 0 && Math.sign(engineDir) === Math.sign(fx));
         const cap = grip * Math.max(0, wi.suspensionForce) * (braking ? 0.72 : 1.0) + 50;
         if (braking && fx > cap) fx = cap; else if (braking && fx < -cap) fx = -cap;
         tyreBrake[i] = braking;
@@ -300,11 +307,12 @@ export function createVehicle(world, map, spec, material) {
   // braking understeer). Each corner never gets more sideways impulse than stops it sliding.
   const tyreGrip = [1, 1, 1, 1], tyreFx = [0, 0, 0, 0], tyreBrake = [false, false, false, false], tyreSlip = [0, 0, 0, 0];
   const fw = new CANNON.Vec3(), lw = new CANNON.Vec3(), vc = new CANNON.Vec3(), rp = new CANNON.Vec3(), Jt = new CANNON.Vec3();
-  let latSpeed = 1;
+  let latSpeed = 1, frontG = 0;
   function tyres(dt) {
     updateR();
     // arcade: more cornering grip as speed rises, so fast bends stay drivable
     latSpeed = 1 + 0.35 * Math.min(1, Math.max(0, (car.speed - 12) / 23));
+    let gF = 0;
     F.set(R[2], R[5], R[8]); L.set(R[0], R[3], R[6]); U.set(R[1], R[4], R[7]);
     for (let i = 0; i < 4; i++) {
       const wi = vehicle.wheelInfos[i], cw = car.wheels[i];
@@ -323,30 +331,42 @@ export function createVehicle(world, map, spec, material) {
       const Fz = Math.min(Math.max(0, wi.suspensionForce), spec.mass * G * 1.6);
       const cap = tyreGrip[i] * Fz;
       const loose = LOOSE[cw.surf];
-      // longitudinal: traction-limited (wheelspin beyond)
-      let fx = tyreFx[i], spin = 0;
-      if (Math.abs(fx) > cap) { spin = Math.min(1, (Math.abs(fx) - cap) / (cap + 1)); fx = Math.sign(fx) * cap * 0.92; }
+      if (cap < 1) continue; // touching but unloaded: nothing to push with
       // lateral from the slip angle
       const ap = (TY.peak ?? 0.12) + 0.08 * loose;
       const a = Math.atan2(Math.abs(vy), Math.max(Math.abs(vx), 1.5));
       const slide = cw.front ? (TY.frontSlide ?? 0.95) : (TY.rearSlide ?? 0.86) - 0.08 * loose;
       const g = a < ap ? Math.sin((a / ap) * Math.PI * 0.5) : 1 - (1 - slide) * Math.min(1, (a - ap) / 0.45);
       const capL = cap * LAT[cw.surf] * (TY.lat ?? 1) * latSpeed;
-      if (cap < 1) continue; // touching but unloaded: nothing to push with
-      const fyMax = capL * Math.sqrt(Math.max(0, 1 - (fx * fx) / (cap * cap)));
-      let jy = -Math.sign(vy) * fyMax * g * dt;
+      // cornering has priority on the friction ellipse: what the tyre spends turning is taken
+      // from traction/braking (a thumb holding Avancer through a bend no longer accelerates
+      // out of it); wheelspin beyond what is left
+      const share = Math.sqrt(Math.max(0.09, 1 - g * g));
+      const fxCap = cap * (tyreBrake[i] ? Math.max(share, 0.45) : share);
+      let fx = tyreFx[i], spin = 0;
+      if (Math.abs(fx) > fxCap) { if (!tyreBrake[i]) spin = Math.min(1, (Math.abs(fx) - fxCap) / (fxCap + 1)); fx = Math.sign(fx) * fxCap * (tyreBrake[i] ? 1 : 0.92); }
+      if (cw.front) gF += g * 0.5;
+      let jy = -Math.sign(vy) * capL * g * dt;
       const ky = car.invMassAt(P, lw);
       const jyStop = (Math.abs(vy) / ky) * 0.5;
       if (Math.abs(jy) > jyStop) jy = Math.sign(jy) * jyStop;
       let jx = fx * dt;
       if (tyreBrake[i]) { const jxStop = (Math.abs(vx) / car.invMassAt(P, fw)) * 0.5; if (Math.abs(jx) > jxStop) jx = Math.sign(jx) * jxStop; }
-      // applied at the contact, its height above the axle scaled down (Bullet's roll influence)
-      const up = rp.dot(U) * (1 - spec.rollInfluence);
+      // drive/brake below the axle (the body dives and squats, damped like the anti-dive /
+      // anti-squat geometry of real suspensions), side force with its height scaled down
+      // (Bullet's roll influence: fewer rollovers)
+      const h0 = rp.dot(U);
+      let up = h0 * (TY.antiPitch ?? 0.55);
       rp.set(rp.x - U.x * up, rp.y - U.y * up, rp.z - U.z * up);
-      Jt.set(fw.x * jx + lw.x * jy, fw.y * jx + lw.y * jy, fw.z * jx + lw.z * jy);
+      Jt.set(fw.x * jx, fw.y * jx, fw.z * jx);
+      chassis.applyImpulse(Jt, rp);
+      up = h0 * (1 - spec.rollInfluence) - up;
+      rp.set(rp.x - U.x * up, rp.y - U.y * up, rp.z - U.z * up);
+      Jt.set(lw.x * jy, lw.y * jy, lw.z * jy);
       chassis.applyImpulse(Jt, rp);
       tyreSlip[i] = Math.max(spin, a > ap * 0.75 ? Math.min(1, (a - ap * 0.75) / 0.3) : 0, inp_handbrakeRear(cw) ? 0.7 : 0);
     }
+    frontG = gF;
   }
   const inp_handbrakeRear = (cw) => car.input.handbrake && !cw.front && Math.abs(car.forwardSpeed) > 2;
   vehicle.updateFriction = tyres;

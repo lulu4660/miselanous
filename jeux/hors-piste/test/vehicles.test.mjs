@@ -66,6 +66,34 @@ for (const id of VEHICLE_ORDER) {
     assert.ok(Math.abs(car.headingYaw() - y0) < 0.04 && car.R[4] > 0.9);
   });
 
+  test(`${spec.name}: drives off after settling (a hair of creep is not braking)`, () => {
+    const phys = createPhysics(flatMap({ surf: S.ASPHALT }));
+    const car = phys.addVehicle(spec, { player: true });
+    car.reset(0, 0, 0);
+    run(phys, 2, () => { car.input.throttle = 0; car.input.brake = 0.12; });
+    car.body.velocity.z -= 0.01; // settle with a tiny backwards creep, as on the real map
+    run(phys, 2, () => { car.input.throttle = 1; car.input.brake = 0; });
+    assert.ok(car.forwardSpeed > 6, `speed after 2 s: ${car.forwardSpeed.toFixed(2)}`);
+  });
+
+  test(`${spec.name}: Avancer + full lock turns tight on dirt and snow, without spinning`, () => {
+    for (const [surf, maxR] of [[S.DIRT, 40], [S.SNOWROAD, 55]]) {
+      const phys = createPhysics(flatMap({ surf, size: 1400, n: 140 }));
+      const car = phys.addVehicle(spec, { player: true });
+      car.assist = 1;
+      car.reset(-550, -550, Math.PI / 4);
+      run(phys, 8, () => { car.input.throttle = 1; car.input.steer = 0; if (car.forwardSpeed > 22) car.input.throttle = 0; });
+      let maxBeta = 0, r = 0, v = 0, n = 0;
+      for (let k = 0; k < 3 / STEP; k++) {
+        car.input.throttle = 1; car.input.steer = 1; phys.update(STEP);
+        maxBeta = Math.max(maxBeta, Math.abs(car.beta));
+        if (k * STEP > 2) { r += Math.abs(car.angVel.y); v += Math.hypot(car.vel.x, car.vel.z); n++; }
+      }
+      const R = v / r;
+      assert.ok(R < maxR && maxBeta < 0.8 && car.R[4] > 0.8, `surface ${surf}: R ${R.toFixed(0)} m, max slip ${(maxBeta * 57.3).toFixed(0)}°`);
+    }
+  });
+
   test(`${spec.name}: rights itself from the roof`, () => {
     const phys = createPhysics(flatMap());
     const car = phys.addVehicle(spec);
