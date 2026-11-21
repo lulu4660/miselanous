@@ -1,0 +1,14 @@
+{
+  "name": "hors-piste",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "cannon-es": "^0.20.0",
+    "esbuild": "0.24.0",
+    "three": "0.170.0"
+  }
+}

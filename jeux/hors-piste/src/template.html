@@ -1,0 +1,249 @@
+<title>Hors Piste</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#231c2b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap">
+<style>
+/* Layout: full-bleed canvas; minimap top-left, view/menu buttons + speed top-right, steering bar and pedals at the bottom; the garage card floats over the live scene. */
+:root {
+  --ink: #231c2b;
+  --cream: #fff4e2;
+  --cream-dim: rgba(255, 244, 226, 0.8);
+  --glass: rgba(35, 28, 43, 0.66);
+  --glass-strong: rgba(35, 28, 43, 0.86);
+  --line: rgba(255, 244, 226, 0.22);
+  --yellow: #ffc94a;
+  --coral: #ff7b5c;
+  --font-display: "Big Shoulders Display", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --font-ui: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; overflow: hidden; background: #8fa0b8; overscroll-behavior: none; }
+body { font-family: var(--font-ui); color: var(--cream); -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.layer { position: fixed; inset: 0; pointer-events: none; }
+button { font: inherit; color: inherit; }
+button:focus-visible { outline: 2px solid var(--yellow); outline-offset: 3px; }
+[hidden] { display: none !important; }
+
+/* loading */
+#loading { display: grid; place-items: center; background: linear-gradient(160deg, #3b3550 0%, #8a6f8e 55%, #e8b08a 100%); z-index: 50; pointer-events: auto; transition: opacity .6s ease; }
+#loading.gone { opacity: 0; pointer-events: none; }
+#loading .wrap { display: grid; gap: 14px; justify-items: center; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
+.logo { font-family: var(--font-display); font-weight: 900; text-transform: uppercase; letter-spacing: .01em; line-height: .9; margin: 0; color: var(--cream); }
+.logo span { color: var(--yellow); }
+#loading .logo { font-size: clamp(56px, 16vw, 120px); }
+#loading p { margin: 0; font-size: 15px; color: var(--cream); }
+#bar { width: min(220px, 60vw); height: 4px; border-radius: 4px; background: rgba(255,255,255,.25); overflow: hidden; }
+#bar i { display: block; height: 100%; width: 0%; background: var(--yellow); transition: width .25s ease; }
+
+/* HUD */
+#hud { z-index: 20; opacity: 0; transition: opacity .5s ease; }
+#hud.on { opacity: 1; }
+.pill { position: absolute; display: flex; align-items: center; gap: 8px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); }
+#mapWrap { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 10px); left: calc(env(safe-area-inset-left, 0px) + 12px); width: 108px; height: 108px; border-radius: 50%;
+  background: var(--glass); border: 2px solid rgba(255,244,226,.35); box-shadow: 0 4px 14px rgba(20,14,26,.3); overflow: hidden; }
+#minimap { width: 100%; height: 100%; display: block; }
+.tr { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 12px); right: calc(env(safe-area-inset-right, 0px) + 12px); display: flex; gap: 8px; pointer-events: auto; }
+.icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--glass); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.icon-btn svg { width: 22px; height: 22px; }
+.icon-btn:active { transform: scale(.94); }
+#speed { top: calc(env(safe-area-inset-top, 0px) + 64px); right: calc(env(safe-area-inset-right, 0px) + 12px); padding: 4px 14px 4px 6px; gap: 10px; pointer-events: auto; cursor: pointer; }
+#gear { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--yellow); color: var(--ink); font-family: var(--font-display); font-weight: 900; font-size: 19px; }
+#speed .v { font-family: var(--font-display); font-weight: 800; font-size: 28px; font-variant-numeric: tabular-nums; min-width: 2.2ch; text-align: right; line-height: 1; }
+#speed .u { font-size: 12px; font-weight: 700; color: var(--cream-dim); }
+#perf { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 106px); right: calc(env(safe-area-inset-right, 0px) + 14px); font-size: 11px; font-weight: 700; color: var(--cream); text-shadow: 0 1px 3px rgba(20,14,26,.8); font-variant-numeric: tabular-nums; }
+#surf { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 124px); left: calc(env(safe-area-inset-left, 0px) + 12px); width: 108px; text-align: center; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--cream); text-shadow: 0 1px 3px rgba(20,14,26,.85); }
+#toast { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 16%); transform: translate(-50%, 8px); text-align: center; opacity: 0; transition: opacity .3s ease, transform .3s ease; width: min(88vw, 520px); }
+#toast.on { opacity: 1; transform: translate(-50%, 0); }
+#toast .big { font-family: var(--font-display); font-weight: 900; text-transform: uppercase; font-size: clamp(30px, 8vw, 48px); line-height: 1; text-shadow: 0 3px 14px rgba(20,14,26,.55); }
+#toast .small { margin-top: 6px; font-size: 15px; font-weight: 700; text-shadow: 0 1px 8px rgba(20,14,26,.7); }
+
+/* menu */
+#menu { position: fixed; z-index: 35; top: calc(env(safe-area-inset-top, 0px) + 62px); right: calc(env(safe-area-inset-right, 0px) + 12px); width: min(260px, calc(100vw - 32px)); padding: 10px; border-radius: 20px;
+  background: var(--glass-strong); border: 1px solid var(--line); display: grid; gap: 6px; pointer-events: auto; box-shadow: 0 10px 30px rgba(20,14,26,.4); }
+#menu button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; border: 0; border-radius: 14px; padding: 13px 14px; background: rgba(255,244,226,.08); font-weight: 700; font-size: 15px; cursor: pointer; text-align: left; }
+#menu button:active { background: rgba(255,244,226,.18); }
+#menu .state { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--yellow); }
+
+/* driving controls */
+.ctl { position: fixed; z-index: 22; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#wheel { left: calc(env(safe-area-inset-left, 0px) + 26px); bottom: calc(env(safe-area-inset-bottom, 0px) + 26px); width: min(200px, calc(100vw - 236px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))); height: 78px; border-radius: 999px;
+  background: var(--glass); border: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; box-sizing: border-box; }
+#wheel .arr { width: 30px; height: 30px; opacity: .8; transition: opacity .1s ease, transform .1s ease; }
+#wheel.left .arr.l, #wheel.right .arr.r { opacity: 1; transform: scale(1.18); }
+#wheelKnob { position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; margin: -25px 0 0 -25px; border-radius: 50%; background: var(--cream); box-shadow: 0 3px 10px rgba(20,14,26,.4); transition: transform .06s linear; display: grid; place-items: center; }
+#wheelKnob::after { content: ""; width: 18px; height: 3px; border-radius: 2px; background: rgba(35,28,43,.35); }
+#wheel.down { background: var(--glass-strong); }
+#pedals { right: calc(env(safe-area-inset-right, 0px) + 16px); bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); display: flex; align-items: flex-end; gap: 10px; padding: 8px; margin: -8px; }
+.pedal { border-radius: 22px; background: var(--glass); border: 1px solid var(--line); display: grid; place-items: center; align-content: center; gap: 4px; color: var(--cream); transition: transform .06s ease, background .06s ease; }
+.pedal svg { width: 30px; height: 30px; }
+.pedal small { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; line-height: 1.15; text-align: center; padding: 0 8px; }
+#brakeP { width: 76px; height: 92px; }
+#gasP { width: 84px; height: 124px; background: rgba(255, 123, 92, .58); border-color: rgba(255, 220, 200, .5); }
+.pedal.down { transform: scale(.94) translateY(2px); background: var(--glass-strong); }
+#gasP.down { background: rgba(255, 123, 92, .88); }
+#horn { position: fixed; z-index: 22; right: calc(env(safe-area-inset-right, 0px) + 22px); bottom: calc(env(safe-area-inset-bottom, 0px) + 166px); width: 54px; height: 54px; border-radius: 50%;
+  background: var(--glass); border: 1px solid var(--line); display: grid; place-items: center; touch-action: none; padding: 0; }
+#horn svg { width: 24px; height: 24px; }
+#horn.down { transform: scale(.92); background: var(--glass-strong); }
+@media (hover: hover) and (pointer: fine) { #wheel, #pedals, #horn { display: none; } }
+body:not(.playing) #wheel, body:not(.playing) #pedals, body:not(.playing) #horn, #hud:not(.on) .tr, #hud:not(.on) #speed { display: none; }
+
+/* garage */
+#garage { z-index: 30; display: flex; flex-direction: column; justify-content: space-between; align-items: center; pointer-events: none;
+  padding: calc(env(safe-area-inset-top, 0px) + 5vh) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 18px) max(16px, env(safe-area-inset-left, 0px));
+  background: linear-gradient(to bottom, rgba(35,28,43,.45) 0%, rgba(35,28,43,0) 30%, rgba(35,28,43,0) 55%, rgba(35,28,43,.55) 100%); transition: opacity .5s ease; }
+#garage.gone { opacity: 0; }
+#garage .head { text-align: center; }
+#garage .logo { font-size: clamp(54px, 15vw, 112px); text-shadow: 0 6px 24px rgba(20,14,26,.35); }
+#garage .tag { margin: 6px 0 0; font-size: clamp(14px, 3.8vw, 17px); font-weight: 600; text-shadow: 0 1px 10px rgba(20,14,26,.6); }
+.card { pointer-events: auto; width: min(420px, 100%); box-sizing: border-box; padding: 16px 16px 14px; border-radius: 26px; background: var(--glass-strong); border: 1px solid var(--line); display: grid; gap: 12px; }
+.card .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.card .nav { width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--line); background: rgba(255,244,226,.08); display: grid; place-items: center; cursor: pointer; padding: 0; flex: none; }
+.card .name { text-align: center; min-width: 0; }
+.card .name h2 { margin: 0; font-family: var(--font-display); font-weight: 900; text-transform: uppercase; font-size: 32px; line-height: 1; }
+.card .name p { margin: 4px 0 0; font-size: 13px; color: var(--cream-dim); }
+.stats { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; font-size: 12px; font-weight: 700; }
+.stats .bar { height: 8px; border-radius: 8px; background: rgba(255,244,226,.12); overflow: hidden; }
+.stats .bar i { display: block; height: 100%; border-radius: 8px; background: var(--yellow); transition: width .3s ease; }
+.paints { display: flex; gap: 10px; justify-content: center; }
+.paints button { width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(255,244,226,.35); cursor: pointer; padding: 0; }
+.paints button[aria-pressed="true"] { border-color: var(--cream); box-shadow: 0 0 0 3px rgba(255,201,74,.55); }
+#go { border: 0; border-radius: 999px; padding: 15px 20px; background: var(--yellow); color: var(--ink); font-weight: 800; font-size: 17px; cursor: pointer; box-shadow: 0 5px 0 #c8962c; }
+#go:active { transform: translateY(3px); box-shadow: 0 2px 0 #c8962c; }
+.card .how { margin: 0; font-size: 12px; text-align: center; color: var(--cream-dim); line-height: 1.4; }
+.card .how b { color: var(--cream); }
+#garagePerf { font-size: 11px; color: var(--cream-dim); text-align: center; font-variant-numeric: tabular-nums; }
+
+#fade { background: #f3ece2; opacity: 0; transition: opacity .3s ease; z-index: 40; }
+#fade.on { opacity: 1; }
+#vignette { z-index: 10; background: radial-gradient(130% 100% at 50% 45%, rgba(0,0,0,0) 60%, rgba(30, 20, 40, .22) 100%); }
+#err { z-index: 60; display: none; place-items: center; background: #231c2b; pointer-events: auto; }
+#err.on { display: grid; }
+#err .box { max-width: 440px; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); text-align: center; }
+#err h2 { font-family: var(--font-display); font-weight: 900; text-transform: uppercase; font-size: 40px; margin: 0 0 10px; }
+#err p { color: var(--cream-dim); line-height: 1.5; font-size: 15px; margin: 0 0 10px; }
+#err code { display: block; font-size: 12px; opacity: .7; word-break: break-word; margin-top: 12px; }
+
+@media (max-width: 389px) {
+  #wheel { left: calc(env(safe-area-inset-left, 0px) + 22px); width: calc(100vw - 196px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)); padding: 0 10px; }
+  #pedals { gap: 8px; right: calc(env(safe-area-inset-right, 0px) + 12px); }
+  #brakeP { width: 64px; } #gasP { width: 72px; }
+  .pedal small { padding: 0 4px; letter-spacing: .02em; }
+  #horn { right: calc(env(safe-area-inset-right, 0px) + 16px); }
+  #mapWrap { width: 92px; height: 92px; } #surf { width: 92px; top: calc(env(safe-area-inset-top, 0px) + 108px); }
+  .icon-btn { width: 40px; height: 40px; } .tr { gap: 6px; }
+}
+@media (max-height: 520px) {
+  #garage { flex-direction: row; align-items: flex-end; padding-top: calc(env(safe-area-inset-top, 0px) + 12px); }
+  #garage .head { align-self: flex-start; text-align: left; }
+  #garage .logo { font-size: 64px; }
+  .card { width: min(380px, 52vw); padding: 12px; gap: 8px; }
+  .card .name h2 { font-size: 26px; }
+  #wheel { height: 66px; } #brakeP { height: 78px; } #gasP { height: 100px; } #horn { bottom: calc(env(safe-area-inset-bottom, 0px) + 136px); }
+  #mapWrap { width: 88px; height: 88px; } #surf { width: 88px; top: calc(env(safe-area-inset-top, 0px) + 102px); }
+}
+@media (prefers-reduced-motion: reduce) { #garage, #toast, #hud, #fade { transition: none; } }
+</style>
+
+<canvas id="game" aria-label="Hors Piste, jeu de rallye en monde ouvert"></canvas>
+<div id="vignette" class="layer"></div>
+
+<div id="hud" class="layer">
+  <div id="mapWrap"><canvas id="minimap" width="216" height="216" aria-label="Carte"></canvas></div>
+  <div id="surf"></div>
+  <div class="tr">
+    <button class="icon-btn" id="btnCam" type="button" aria-label="Changer de vue">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff4e2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5h3l1.6-2.2h6.8L17 8.5h3v10H4Z" fill="rgba(255,244,226,.12)"/><circle cx="12" cy="13.3" r="3.4"/></svg>
+    </button>
+    <button class="icon-btn" id="btnMenu" type="button" aria-label="Menu" aria-expanded="false" aria-controls="menu">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="2" fill="#fff4e2"/><circle cx="12" cy="12" r="2" fill="#fff4e2"/><circle cx="18.5" cy="12" r="2" fill="#fff4e2"/></svg>
+    </button>
+  </div>
+  <div id="speed" class="pill" title="Touchez pour afficher les performances"><span id="gear">1</span><span class="v" id="kmh">0</span><span class="u">km/h</span></div>
+  <div id="perf" hidden></div>
+  <div id="toast"><div class="big" id="toastBig"></div><div class="small" id="toastSmall"></div></div>
+</div>
+
+<div id="menu" hidden role="menu">
+  <button id="mGarage" type="button" role="menuitem">Garage <span class="state">Changer</span></button>
+  <button id="mReset" type="button" role="menuitem">Revenir sur la route <span class="state">↺</span></button>
+  <button id="mFx" type="button" role="menuitem">Effets visuels <span class="state" id="mFxState">Oui</span></button>
+  <button id="mSound" type="button" role="menuitem">Son <span class="state" id="mSoundState">Oui</span></button>
+  <button id="mPerf" type="button" role="menuitem">Performances <span class="state" id="mPerfState">Non</span></button>
+</div>
+
+<div id="wheel" class="ctl" role="slider" aria-label="Volant : glisse ou touche les flèches" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0">
+  <svg class="arr l" viewBox="0 0 30 30" aria-hidden="true"><path d="M19 7 10 15l9 8" fill="none" stroke="#fff4e2" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <div id="wheelKnob"></div>
+  <svg class="arr r" viewBox="0 0 30 30" aria-hidden="true"><path d="m11 7 9 8-9 8" fill="none" stroke="#fff4e2" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</div>
+<div id="pedals" class="ctl">
+  <div id="brakeP" class="pedal" role="button" aria-label="Frein, puis marche arrière">
+    <svg viewBox="0 0 30 30" aria-hidden="true"><rect x="8" y="8" width="14" height="14" rx="3" fill="#fff4e2"/></svg>
+    <small>Frein<br>Recul</small>
+  </div>
+  <div id="gasP" class="pedal" role="button" aria-label="Accélérer">
+    <svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 6 24 17h-5.5v7h-7v-7H6Z" fill="#fff4e2"/></svg>
+    <small>Avancer</small>
+  </div>
+</div>
+<button id="horn" type="button" aria-label="Klaxon">
+  <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 14.5h7.5c2.2 0 4.3-.9 6-2.4L25 7v18l-6.5-5.1c-1.7-1.5-3.8-2.4-6-2.4H5Z" fill="#fff4e2"/><rect x="3" y="13" width="3" height="6" rx="1.2" fill="#fff4e2"/></svg>
+</button>
+
+<div id="garage" class="layer">
+  <div class="head">
+    <h1 class="logo">Hors<span> Piste</span></h1>
+    <p class="tag">Neige, bitume et poussière : une grande carte, roule où tu veux.</p>
+  </div>
+  <div class="card" role="group" aria-label="Garage">
+    <div class="row">
+      <button class="nav" id="prevCar" type="button" aria-label="Véhicule précédent"><svg viewBox="0 0 30 30" width="22" height="22" aria-hidden="true"><path d="M19 7 10 15l9 8" fill="none" stroke="#fff4e2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="name"><h2 id="carName">Cabri R4</h2><p id="carTag"></p></div>
+      <button class="nav" id="nextCar" type="button" aria-label="Véhicule suivant"><svg viewBox="0 0 30 30" width="22" height="22" aria-hidden="true"><path d="m11 7 9 8-9 8" fill="none" stroke="#fff4e2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="paints" id="paints" role="group" aria-label="Peinture"></div>
+    <button id="go" type="button">Rouler</button>
+    <p class="how" id="how"></p>
+    <div id="garagePerf"></div>
+  </div>
+</div>
+
+<div id="fade" class="layer"></div>
+<div id="loading" class="layer">
+  <div class="wrap">
+    <h1 class="logo">Hors<span> Piste</span></h1>
+    <div id="bar"><i></i></div>
+    <p id="loadText">Les montagnes se lèvent…</p>
+  </div>
+</div>
+<div id="err" class="layer" role="alert">
+  <div class="box">
+    <h2>Calage</h2>
+    <p id="errText">Le jeu n'a pas pu démarrer sur cet appareil.</p>
+    <p>Recharge la page. Si ça persiste, essaie un autre navigateur récent (Safari, Chrome).</p>
+    <code id="errCode"></code>
+  </div>
+</div>
+
+<script>
+(function () {
+  function show(msg) {
+    var e = document.getElementById('err');
+    if (!e || e.classList.contains('on')) return;
+    document.getElementById('errCode').textContent = String(msg || '').slice(0, 300);
+    e.classList.add('on');
+  }
+  window.__mbShowError = show;
+  window.addEventListener('error', function (ev) { if (!window.__mbBooted) show(ev.message || 'Erreur de script'); });
+  window.addEventListener('unhandledrejection', function (ev) { if (!window.__mbBooted) show((ev.reason && ev.reason.message) || 'Erreur de chargement'); });
+  setTimeout(function () {
+    if (!window.__mbStarted) { document.getElementById('errText').textContent = "Le moteur 3D n'a pas pu se charger (connexion lente ou bloquée)."; show('three.js module timeout'); }
+  }, 25000);
+})();
+</script>
+<!--BUNDLE-->
