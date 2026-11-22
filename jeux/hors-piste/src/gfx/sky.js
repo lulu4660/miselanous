@@ -73,7 +73,7 @@ export function createSky(world) {
   // ---- distant mountains
   const n = createNoise2D(4242);
   const SEG = 220, RINGS = 7;
-  const pos = [], col = [], idx = [];
+  const pos = [], col = [], idx = [], rise = [];
   const bw = [0, 0, 0];
   const c = new THREE.Color(), tmp = new THREE.Color(), tmp2 = new THREE.Color();
   const SNOW = new THREE.Color('#f4f7fc'), ROCKB = new THREE.Color('#7d86a6'), HILL = new THREE.Color('#6f8fa8'), HILL2 = new THREE.Color('#8faab0');
@@ -98,6 +98,7 @@ export function createSky(world) {
       const rim = world.heightAt(sx * 495, sz * 495);
       const h = rim * (1 - t) - 6 * t + ridge * prof * (0.85 + 0.15 * n(a * 40, r));
       pos.push(sx * radius, h, sz * radius);
+      rise.push(Math.max(0, h - rim));
       // colour: snow caps above a ragged line, rock below; hills in blue-green haze; mesa strata
       const snowLine = 150 + n(a * 30, 9) * 25;
       const alpC = h > snowLine ? SNOW : tmp.copy(ROCKB).lerp(SNOW, Math.max(0, (h - snowLine + 60) / 120) * 0.4);
@@ -121,17 +122,20 @@ export function createSky(world) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('aRise', new THREE.Float32BufferAttribute(rise, 1));
   g.setIndex(idx);
   const mtnMat = new THREE.ShaderMaterial({
     uniforms: { uHaze: { value: new THREE.Color('#e2d6c8') }, uAmt: { value: 0.64 } },
     vertexShader: /* glsl */`
-      attribute vec3 color; varying vec3 vC; varying float vH;
-      void main() { vC = color; vH = position.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      attribute vec3 color; attribute float aRise; varying vec3 vC; varying float vH;
+      void main() { vC = color; vH = aRise; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */`
       uniform vec3 uHaze; uniform float uAmt; varying vec3 vC; varying float vH;
       void main() {
         // aerial perspective: the feet sink into the haze, the crests stand out
-        float a = uAmt + 0.08 * (1.0 - smoothstep(20.0, 120.0, vH));
+        // vH = height above the foot: the foot is lost in the same haze as the far land, the
+        // crests come out of it
+        float a = mix(0.97, uAmt, smoothstep(0.0, 110.0, vH));
         gl_FragColor = vec4(mix(vC, uHaze, a), 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>

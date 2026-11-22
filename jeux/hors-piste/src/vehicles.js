@@ -31,7 +31,7 @@ export const VEHICLES = {
     inertiaMul: [1.2, 1.0, 1.3],
     stats: { vitesse: 0.72, accel: 0.8, adherence: 0.78, toutTerrain: 0.75 },
     sound: { pitch: 1.25 },
-    livery: { primary: '#2f7fd8', secondary: '#f4efe6', accent: '#ffcf3d' },
+    livery: { primary: '#2f7fd8', secondary: '#f0dcc4', accent: '#ffcf3d' },
   },
   mistral: {
     id: 'mistral', name: 'Mistral GT', tagline: 'Coupé propulsion, roi du bitume',
@@ -46,7 +46,7 @@ export const VEHICLES = {
     inertiaMul: [1.1, 1.0, 1.5],
     stats: { vitesse: 0.95, accel: 0.9, adherence: 0.6, toutTerrain: 0.3 },
     sound: { pitch: 1.05 },
-    livery: { primary: '#d8352f', secondary: '#1f1d24', accent: '#f4efe6' },
+    livery: { primary: '#d8352f', secondary: '#1f1d24', accent: '#f0dcc4' },
   },
   bison: {
     id: 'bison', name: 'Bison 4×4', tagline: 'Gros tout-terrain, imperturbable',
@@ -61,7 +61,7 @@ export const VEHICLES = {
     inertiaMul: [1.25, 1.0, 1.6],
     stats: { vitesse: 0.5, accel: 0.55, adherence: 0.85, toutTerrain: 1.0 },
     sound: { pitch: 0.8 },
-    livery: { primary: '#f2755b', secondary: '#f6ead6', accent: '#3dbdb7' },
+    livery: { primary: '#f2755b', secondary: '#f2dcc2', accent: '#3dbdb7' },
   },
   criquet: {
     id: 'criquet', name: 'Criquet', tagline: 'Buggy léger, saute partout',
@@ -83,10 +83,10 @@ export const VEHICLE_ORDER = ['cabri', 'mistral', 'bison', 'criquet'];
 
 // AI liveries (paint variations)
 export const LIVERIES = [
-  { primary: '#f2a23a', secondary: '#1f1d24', accent: '#f4efe6' },
-  { primary: '#6b4fd8', secondary: '#f4efe6', accent: '#3ad8c0' },
+  { primary: '#f2a23a', secondary: '#1f1d24', accent: '#f0dcc4' },
+  { primary: '#6b4fd8', secondary: '#f0dcc4', accent: '#3ad8c0' },
   { primary: '#e8e3d8', secondary: '#c2372f', accent: '#1f1d24' },
   { primary: '#1f6b4f', secondary: '#e9d6a3', accent: '#f2a23a' },
-  { primary: '#d84f8c', secondary: '#f4efe6', accent: '#2b2730' },
+  { primary: '#d84f8c', secondary: '#f0dcc4', accent: '#2b2730' },
   { primary: '#2b2730', secondary: '#ffcf3d', accent: '#e8e3d8' },
 ];

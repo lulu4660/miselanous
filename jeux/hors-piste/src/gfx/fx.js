@@ -85,11 +85,11 @@ export function createParticles(max = 900) {
       });
     },
     // billowing dust (or snow powder): grows, rises a little, lingers behind the car
-    dust(x, y, z, vx, vz, color = '#ead2a8', big = 1) {
+    dust(x, y, z, vx, vz, color = '#ead2a8', big = 1, alpha = 0.5) {
       spawn({
         x: x + (Math.random() - 0.5) * 0.5, y: y + 0.35, z: z + (Math.random() - 0.5) * 0.5,
         vx: vx * 0.22 + (Math.random() - 0.5) * 1.4, vy: 1.0 + Math.random() * 1.4, vz: vz * 0.22 + (Math.random() - 0.5) * 1.4,
-        max: (0.8 + Math.random() * 0.6) * big, s0: 0.7, s1: (2.6 + Math.random() * 1.6) * big, a0: 0.5, grav: -0.25, drag: 1.8, color, type: 2,
+        max: (0.8 + Math.random() * 0.6) * big, s0: 0.7, s1: (2.6 + Math.random() * 1.6) * big, a0: alpha, grav: -0.25, drag: 1.8, color, type: 2,
       });
     },
     // gravel / snow lumps thrown back by a spinning or sliding tyre

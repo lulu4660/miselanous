@@ -429,7 +429,7 @@ async function boot() {
 
   // ---------- per-frame effects (player car)
   const fxState = [0, 1, 2, 3].map(() => ({ acc: 0, chip: 0 }));
-  const DUST = ['#5a5a60', '#e8c9a0', '#f4f7fc', '#d6c79a', '#f2d1a2', '#f8fafd', '#c9beb4', '#e6f4f9'];
+  const DUST = ['#5a5a60', '#e8c9a0', '#fffaf3', '#d6c79a', '#f2d1a2', '#fffbf5', '#c9beb4', '#f2f8fb'];
   function wheelEffects(dt, c, trackIdx) {
     for (let i = 0; i < 4; i++) {
       const w = c.wheels[i];
@@ -453,12 +453,12 @@ async function boot() {
       while (wf.acc > 1) {
         wf.acc -= 1;
         if (s === S.ASPHALT) particles.smoke(w.contact.x, w.contact.y, w.contact.z, c.vel.x, c.vel.z);
-        else particles.dust(w.contact.x, w.contact.y, w.contact.z, c.vel.x, c.vel.z, DUST[s], snowy ? 0.9 : 1);
+        else particles.dust(w.contact.x, w.contact.y, w.contact.z, c.vel.x, c.vel.z, DUST[s], snowy ? 0.85 : 1, snowy ? 0.68 : 0.5);
       }
       // thrown gravel / snow lumps when the tyre works hard
       if (soft && s !== S.GRASS && (w.slip > 0.25 || (sp > 9 && !w.front))) {
-        wf.chip = (wf.chip || 0) + dt * (w.slip * 30 + sp * 0.15);
-        while (wf.chip > 1) { wf.chip -= 1; particles.chips(w.contact.x, w.contact.y, w.contact.z, c.vel.x, c.vel.z, snowy ? '#f4f7fd' : s === S.SAND ? '#c99a66' : '#6f5644'); }
+        wf.chip = (wf.chip || 0) + dt * (w.slip * 30 + sp * (snowy ? 0.45 : 0.15));
+        while (wf.chip > 1) { wf.chip -= 1; particles.chips(w.contact.x, w.contact.y, w.contact.z, c.vel.x, c.vel.z, snowy ? '#fffaf3' : s === S.SAND ? '#c99a66' : '#6f5644'); }
       }
     }
   }
