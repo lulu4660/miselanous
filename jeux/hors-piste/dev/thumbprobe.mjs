@@ -13,7 +13,7 @@ function run(id, surf, v0, T = 3) {
   car.reset(-550, -550, Math.PI / 4);
   let t = 0;
   while (car.forwardSpeed < v0 && t < 40 && v0 > 0) { car.input.throttle = 1; car.input.steer = 0; phys.update(STEP); t += STEP; }
-  let maxB = 0, spun = false, h0 = car.headingYaw(), t90 = null, rS = 0, n = 0, vS = 0, minUp = 1;
+  let maxB = 0, spun = false, h0 = car.headingYaw(), t90 = null, rS = 0, n = 0, vS = 0, minUp = 1, prevV = null;
   for (let k = 0; k < T / STEP; k++) {
     car.input.throttle = 1; car.input.steer = 1; car.input.brake = 0;
     phys.update(STEP);
@@ -22,7 +22,10 @@ function run(id, surf, v0, T = 3) {
     maxB = Math.max(maxB, Math.abs(b)); if (Math.abs(b) > 2.2) spun = true;
     if (t90 === null && Math.abs(wrap(hd - h0)) > Math.PI / 2) t90 = k * STEP;
     minUp = Math.min(minUp, car.R[4]);
-    if (k * STEP > T - 1) { rS += Math.abs(car.angVel.y); vS += sp; n++; }
+    // path curvature from the turn of the velocity (the body yaw rate can swing in a slide)
+    const vy = Math.atan2(car.vel.x, car.vel.z);
+    if (k * STEP > T - 1.5 && prevV !== null) { rS += Math.abs(wrap(vy - prevV)) / STEP; vS += sp; n++; }
+    prevV = vy;
   }
   const v = vS / n, r = rS / n;
   return `R ${String(Math.round(v / Math.max(r, 1e-3))).padStart(3)} m @${v.toFixed(0)} m/s, max slip ${deg(maxB)}°, 90° in ${t90 === null ? '-' : t90.toFixed(2)} s${spun ? ' SPUN' : ''}${minUp < 0.5 ? ' ROLLED' : ''}`;

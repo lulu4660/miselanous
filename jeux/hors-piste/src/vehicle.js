@@ -239,6 +239,9 @@ export function createVehicle(world, map, spec, material) {
       engineF = drive * spec.engineForce * 0.55 * k;
     } else if (speedF > 1.5 && car.shiftT <= 0 && grounded0 >= 2) {
       engineF = -(spec.engineBrake ?? 0.16) * spec.engineForce * ratio * Math.min(1, 0.25 + rpmN);
+    } else if (speedF < -0.3 && grounded0 >= 2) {
+      // rolling back in reverse gear with the pedal released: the engine holds it back too
+      engineF = (spec.engineBrake ?? 0.16) * spec.engineForce * 1.2 * Math.min(1, 0.3 - speedF / spec.reverseSpeed);
     }
 
     // per-wheel grip and longitudinal force, applied by tyres() inside the vehicle update
@@ -258,8 +261,10 @@ export function createVehicle(world, map, spec, material) {
       // handbrake locks it (everything else comes from the loads on each tyre)
       // (rear tyres a little wider than the fronts)
       const grip = SURF_GRIP[cw.surf] * spec.grip[cw.surf] * (cw.front ? 1 : (TY.rearGrip ?? 1.06));
-      const locked = !cw.front && inp.handbrake && Math.abs(speedF) > 1;
-      tyreLat[i] = locked ? 0.22 : 1;
+      // (the lock fades in with speed: a hard threshold made it chatter at walking pace)
+      const lockAmt = !cw.front && inp.handbrake ? Math.min(1, Math.abs(speedF) / 2.5) : 0;
+      const locked = lockAmt > 0.05;
+      tyreLat[i] = 1 - 0.78 * lockAmt;
       let fx = engineF * torqueSplit[i] - Math.sign(speedF) * resist / 4;
       // braking keeps ~25% of the grip for steering (ABS-like); traction may use more
       if (wi.isInContact) {
@@ -271,7 +276,7 @@ export function createVehicle(world, map, spec, material) {
         if (braking && fx > cap) fx = cap; else if (braking && fx < -cap) fx = -cap;
         tyreBrake[i] = braking;
         // handbrake: the rear wheels lock and slide (the rear lets go, the car pivots)
-        if (locked) { fx = -Math.sign(speedF) * grip * Math.max(0, wi.suspensionForce) * 0.7; tyreBrake[i] = true; }
+        if (locked) { fx = fx * (1 - lockAmt) - Math.sign(speedF) * grip * Math.max(0, wi.suspensionForce) * 0.7 * lockAmt; tyreBrake[i] = true; }
       }
       tyreGrip[i] = grip; tyreFx[i] = fx;
       vehicle.applyEngineForce(0, i);
