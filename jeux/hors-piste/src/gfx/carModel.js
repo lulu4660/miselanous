@@ -47,7 +47,6 @@ function makeWheelGeo(rimHex, spokes = 5) {
   colorize(well, '#201c25'); parts.push(well);
   const disc = new THREE.CylinderGeometry(0.2, 0.2, 0.03, 14, 1); disc.rotateZ(Math.PI / 2); place(disc, { x: 0.125 });
   colorize(disc, '#8c8794'); parts.push(disc);
-  const cal = new THREE.BoxGeometry(0.05, 0.1, 0.1); place(cal, { x: 0.16, y: 0.19 });
   // lip ring
   const lip = new THREE.LatheGeometry([[0.25, 0.19], [0.30, 0.22], [0.325, 0.19]].map(([r, a]) => new THREE.Vector2(r, a)), 16);
   lip.rotateZ(-Math.PI / 2);
@@ -62,7 +61,6 @@ function makeWheelGeo(rimHex, spokes = 5) {
   }
   const hub = new THREE.CylinderGeometry(0.075, 0.095, 0.07, 8, 1); hub.rotateZ(-Math.PI / 2); place(hub, { x: 0.2 });
   colorize(hub, shadeHex(rimHex, 0.55)); parts.push(hub);
-  void cal;
   const geo = merge(parts);
   wheelCache.set(key, geo);
   return geo;
@@ -142,7 +140,7 @@ function makeLights() {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying float vBrk; uniform float uBrake;')
       .replace('#include <color_fragment>', `#include <color_fragment>
-if (vBrk > 0.5) { if (uBrake < 0.03) discard; diffuseColor.rgb = vec3(1.0, 0.1, 0.06) * (0.55 + 1.1 * uBrake); }`);
+if (vBrk > 0.5) { if (uBrake < 0.03) discard; diffuseColor.rgb = vec3(1.0, 0.1, 0.06) * (0.3 + 0.7 * uBrake); }`);
   };
   return { mat, U };
 }

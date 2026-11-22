@@ -47,7 +47,7 @@ async function boot() {
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.toneMappingExposure = 1.15;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.type = tierName === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   let renderScale = quality.scale, maxScale = 1, upCooldown = 4;
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(PALETTE.fog.clone(), 30, quality.far);
@@ -84,7 +84,7 @@ async function boot() {
   const sun = new THREE.DirectionalLight('#ffd9ae', 4.3);
   sun.castShadow = true;
   sun.shadow.mapSize.set(quality.shadow, quality.shadow);
-  const SH = 46;
+  const SH = 34; // a tighter shadow box: crisper car and tree shadows
   Object.assign(sun.shadow.camera, { left: -SH, right: SH, top: SH, bottom: -SH, near: 1, far: 260 });
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05;
   scene.add(sun, sun.target);
@@ -410,6 +410,23 @@ async function boot() {
     }
   }
 
+  // ---------- the body gets muddy on dirt, dusty on sand, white on snow; tarmac slowly cleans it
+  const DIRT_COL = { mud: new THREE.Color('#7b5a40'), sand: new THREE.Color('#c9a173'), snow: new THREE.Color('#eef3fa') };
+  const dirtCol = new THREE.Color();
+  function updateDirt(c, m, dt) {
+    if (!m.setDirt) return;
+    const s = c.surface, sp = Math.min(1, c.speed / 20);
+    const kind = s === S.SNOW || s === S.SNOWROAD || s === S.ICE ? 'snow' : s === S.SAND ? 'sand' : s === S.DIRT || s === S.GRASS ? 'mud' : null;
+    m.dirtKind = m.dirtKind || 'mud';
+    let a = m.dirt || 0;
+    if (kind && c.groundedCount > 0) {
+      if (kind !== m.dirtKind) { a *= Math.max(0, 1 - dt * 0.6); if (a < 0.08) m.dirtKind = kind; } // the old layer washes off first
+      else a = Math.min(0.85, a + dt * 0.045 * (0.3 + sp + c.skid));
+    } else a = Math.max(0, a - dt * 0.006);
+    dirtCol.copy(DIRT_COL[m.dirtKind]);
+    if (Math.abs(a - (m.dirt || 0)) > 0.002 || !m.dirtSet) { m.setDirt(a, dirtCol); m.dirtSet = true; }
+  }
+
   // ---------- per-frame effects (player car)
   const fxState = [0, 1, 2, 3].map(() => ({ acc: 0, chip: 0 }));
   const DUST = ['#5a5a60', '#d6b08a', '#f2f5fb', '#c9bb8e', '#ebc28e', '#f7f9fd', '#b9aea4', '#e2f2f8'];
@@ -513,11 +530,12 @@ async function boot() {
     U.uCarPos.value.set(car.pos.x, car.pos.y, car.pos.z);
     U.uCutout.value += ((game.mode === 'play' && view !== 'bonnet' ? 1 : 0) - U.uCutout.value) * Math.min(1, dt * 3);
     model.sync(car, dt);
+    updateDirt(car, model, dt);
     traffic.cars.forEach((c, i) => {
       const m = aiModels[i];
       const d2 = (c.pos.x - camera.position.x) ** 2 + (c.pos.z - camera.position.z) ** 2;
       m.root.visible = d2 < quality.far * quality.far;
-      if (m.root.visible) { m.sync(c, dt); if (c.active && d2 < 70 * 70) wheelEffects(dt, c, false); }
+      if (m.root.visible) { m.sync(c, dt); updateDirt(c, m, dt); if (c.active && d2 < 70 * 70) wheelEffects(dt, c, false); }
     });
     propMeshes.sync(camera.position, quality.far * 0.6);
     particles.update(dt);

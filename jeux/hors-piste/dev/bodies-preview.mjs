@@ -1,4 +1,5 @@
-// Preview of the procedural car bodies: node dev/bodies-preview.mjs [out.png] [ids,comma] [cols]
+// Preview of the full procedural cars (createVehicleModel: body + wheels + shocks) in 4 views per car.
+// node dev/bodies-preview.mjs [out.png] [ids,comma]   env: Z=1 (bigger 2x2 tiles) DIRT=0..1 BRAKE=1 STEER=rad VIEW=x,y,z (4th view)
 // Bundles a tiny three.js page with esbuild, renders 4 views per body (front-3/4, rear-3/4, side, top) and screenshots it.
 import * as esbuild from 'esbuild';
 import { createRequire } from 'node:module';
@@ -20,6 +21,7 @@ const ids = ${JSON.stringify(ids)};
 const ZOOM = ${process.env.Z ? 1 : 0};
 const DIRT = ${process.env.DIRT ? Number(process.env.DIRT) : 0};
 const BRAKE = ${process.env.BRAKE ? 1 : 0};
+const STEER = ${process.env.STEER ? Number(process.env.STEER) : 0};
 const CW = ZOOM ? 960 : 480, CH = ZOOM ? 660 : 330;
 const COLS = ZOOM ? 2 : 4, ROWS_PER = ZOOM ? 2 : 1;
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -58,7 +60,7 @@ const calls = (m) => { let t = 0; m.traverse((o) => { if (o.isMesh && o.visible)
 const info = {};
 const fakeCar = (spec) => ({
   rpos: { x: 0, y: 0, z: 0 }, rq: { x: 0, y: 0, z: 0, w: 1 }, pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 },
-  wheels: spec.wheels.map((w) => ({ x: w.x, y: w.y, z: w.z, suspLen: spec.restLength * 0.7, spin: 0.3, steerAngle: 0 })),
+  wheels: spec.wheels.map((w) => ({ x: w.x, y: w.y, z: w.z, suspLen: spec.restLength * 0.7, spin: 0.3, steerAngle: w.front ? STEER : 0 })),
   throttle: BRAKE ? -1 : 0, brake: BRAKE ? 1 : 0, forwardSpeed: 5, speed: 5, input: { handbrake: false },
 });
 ids.forEach((id) => {
