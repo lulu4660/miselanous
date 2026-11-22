@@ -45,11 +45,11 @@ export function createSky(world) {
         // high thin cirrus
         vec2 cq = d.xz / max(0.12, y + 0.25) * 0.08 + vec2(uTime * 0.0006, 0.0);
         float ci = smoothstep(0.52, 0.8, fbm(cq * vec2(1.0, 3.5))) * smoothstep(0.12, 0.35, y);
-        col = mix(col, mix(cCloudLit, cGlow, 0.25), ci * 0.35);
+        col = mix(col, mix(cCloudLit, cGlow, 0.25), ci * 0.18);
         // cumulus band above the horizon, lit from the sun side, shaded underneath
-        vec2 cp = d.xz / max(0.07, y + 0.16) * 0.2 + vec2(uTime * 0.0015, 0.0);
+        vec2 cp = d.xz / max(0.07, y + 0.16) * 0.11 + vec2(uTime * 0.001, 0.0);
         float c = fbm(cp);
-        float cm = smoothstep(0.5, 0.66, c) * smoothstep(0.015, 0.1, y) * (1.0 - smoothstep(0.3, 0.6, y));
+        float cm = smoothstep(0.56, 0.68, c) * smoothstep(0.015, 0.1, y) * (1.0 - smoothstep(0.25, 0.5, y));
         vec2 toSun = normalize(s.xz + 1e-4) * 0.02;
         float lit = clamp((c - fbm(cp + toSun)) * 6.0 + 0.55, 0.0, 1.0);
         vec3 cloud = mix(cCloudShade, cCloudLit, lit);
@@ -87,14 +87,16 @@ export function createSky(world) {
     const [ws, wa, wd] = bw;
     for (let r = 0; r <= RINGS; r++) {
       const t = r / RINGS; // 0 = foot (near), 1 = crest (far)
-      const radius = 640 + t * 360 + n(a * 3, 7) * 60;
+      const radius = 515 + t * 430 + n(a * 3, 7) * 40 * t;
       // ridge heights per style
-      const alp = Math.pow(Math.max(0, n(a * 9, 1) * 0.5 + 0.5), 1.6) * 260 + Math.abs(n(a * 23, 2)) * 90 + 60;
+      const alp = Math.pow(Math.max(0, n(a * 9, 1) * 0.5 + 0.5), 1.6) * 210 + Math.abs(n(a * 23, 2)) * 70 + 50;
       const hil = (n(a * 5, 3) * 0.5 + 0.5) * 90 + Math.abs(n(a * 14, 4)) * 30 + 30;
-      const mes = (n(a * 6, 5) > 0.05 ? 150 : 70) + n(a * 30, 6) * 8; // flat tops, steep sides
+      const mes = (n(a * 6, 5) > 0.05 ? 95 : 48) + n(a * 30, 6) * 8; // flat tops, steep sides
       const ridge = alp * ws + hil * wa + mes * wd;
       const prof = wd > 0.5 ? Math.min(1, Math.pow(t * 1.25, 0.35)) : Math.sin(t * Math.PI * 0.5);
-      const h = 20 + ridge * prof * (0.85 + 0.15 * n(a * 40, r));
+      // the foot meets the map's rim (whose heights are 0-55 m) so no flat shelf shows
+      const rim = world.heightAt(sx * 495, sz * 495);
+      const h = rim * (1 - t) - 6 * t + ridge * prof * (0.85 + 0.15 * n(a * 40, r));
       pos.push(sx * radius, h, sz * radius);
       // colour: snow caps above a ragged line, rock below; hills in blue-green haze; mesa strata
       const snowLine = 150 + n(a * 30, 9) * 25;
@@ -121,7 +123,7 @@ export function createSky(world) {
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.setIndex(idx);
   const mtnMat = new THREE.ShaderMaterial({
-    uniforms: { uHaze: { value: new THREE.Color('#e2d6c8') }, uAmt: { value: 0.42 } },
+    uniforms: { uHaze: { value: new THREE.Color('#e2d6c8') }, uAmt: { value: 0.64 } },
     vertexShader: /* glsl */`
       attribute vec3 color; varying vec3 vC; varying float vH;
       void main() { vC = color; vH = position.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
@@ -129,7 +131,7 @@ export function createSky(world) {
       uniform vec3 uHaze; uniform float uAmt; varying vec3 vC; varying float vH;
       void main() {
         // aerial perspective: the feet sink into the haze, the crests stand out
-        float a = mix(uAmt + 0.35, uAmt, smoothstep(10.0, 140.0, vH));
+        float a = uAmt + 0.08 * (1.0 - smoothstep(20.0, 120.0, vH));
         gl_FragColor = vec4(mix(vC, uHaze, a), 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>

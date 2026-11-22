@@ -243,14 +243,15 @@ export function createVegetation(world, quality) {
   })();
   const flowers = [];
   const PETALS = ['#f6f1e6', '#ffd44a', '#c98bdc', '#ff8a6a', '#8fb8ff'];
-  for (let k = 0; k < quality.grass * 2 && flowers.length < quality.grass * 0.35; k++) {
+  for (let k = 0; k < quality.grass && flowers.length < quality.grass * 0.35; k++) {
     const [cx, cz] = sample(0.85, 22);
     world.biomeWeights(cx, cz, bw);
     if (bw[1] < 0.6 || !free(cx, cz, 5.2)) continue;
     const hue = PETALS[Math.floor(rnd() * PETALS.length)];
-    const n = 2 + Math.floor(rnd() * 5);
+    const n = 10 + Math.floor(rnd() * 10);
     for (let q = 0; q < n; q++) {
-      const x = cx + (rnd() - 0.5) * 3, z = cz + (rnd() - 0.5) * 3;
+      const a = rnd() * 6.28, r = Math.sqrt(rnd()) * 2.6;
+      const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
       if (!free(x, z, 5)) continue;
       flowers.push({ x, z, y: world.heightAt(x, z) - 0.02, s: 0.8 + rnd() * 0.5, rot: rnd() * 6.28, hue });
     }

@@ -19,20 +19,20 @@ export function createParticles(max = 900) {
     vertexShader: /* glsl */`
       attribute vec3 aColor; attribute float aSize; attribute float aAlpha;
       uniform float uScale;
-      varying vec3 vColor; varying float vAlpha;
+      varying vec3 vColor; varying float vAlpha; varying float vSize;
       void main() {
-        vColor = aColor; vAlpha = aAlpha;
+        vColor = aColor; vAlpha = aAlpha; vSize = aSize;
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_PointSize = aSize * uScale / max(0.5, -mv.z);
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */`
-      varying vec3 vColor; varying float vAlpha;
+      varying vec3 vColor; varying float vAlpha; varying float vSize;
       void main() {
         vec2 c = gl_PointCoord - 0.5;
         float d = length(c);
         // soft puff with a little irregularity (big particles read as dust, not as discs)
-        float wob = 0.86 + 0.14 * sin(atan(c.y, c.x) * 5.0 + vAlpha * 40.0);
+        float wob = 1.0 - 0.14 * smoothstep(0.6, 1.6, vSize) * (0.5 + 0.5 * sin(atan(c.y, c.x) * 5.0 + vAlpha * 40.0)); // only big puffs get ragged
         float a = pow(max(0.0, 1.0 - d / (0.5 * wob)), 1.8) * vAlpha;
         if (a < 0.01) discard;
         gl_FragColor = vec4(vColor, a);
@@ -87,9 +87,9 @@ export function createParticles(max = 900) {
     // billowing dust (or snow powder): grows, rises a little, lingers behind the car
     dust(x, y, z, vx, vz, color = '#ead2a8', big = 1) {
       spawn({
-        x: x + (Math.random() - 0.5) * 0.4, y: y + 0.15, z: z + (Math.random() - 0.5) * 0.4,
-        vx: vx * 0.18 + (Math.random() - 0.5) * 1.2, vy: 0.5 + Math.random() * 1.1, vz: vz * 0.18 + (Math.random() - 0.5) * 1.2,
-        max: (1.4 + Math.random() * 1.2) * big, s0: 0.45, s1: (1.8 + Math.random() * 1.5) * big, a0: 0.46, grav: -0.12, drag: 1.4, color, type: 2,
+        x: x + (Math.random() - 0.5) * 0.5, y: y + 0.35, z: z + (Math.random() - 0.5) * 0.5,
+        vx: vx * 0.22 + (Math.random() - 0.5) * 1.4, vy: 1.0 + Math.random() * 1.4, vz: vz * 0.22 + (Math.random() - 0.5) * 1.4,
+        max: (0.8 + Math.random() * 0.6) * big, s0: 0.7, s1: (2.6 + Math.random() * 1.6) * big, a0: 0.5, grav: -0.25, drag: 1.8, color, type: 2,
       });
     },
     // gravel / snow lumps thrown back by a spinning or sliding tyre

@@ -104,7 +104,7 @@ async function boot() {
     const envScene = new THREE.Scene();
     envScene.add(new THREE.Mesh(sky.dome.geometry, sky.dome.material));
     scene.environment = pmrem.fromScene(envScene, 0.04, 0.1, 3000).texture;
-    scene.environmentIntensity = 0.85;
+    scene.environmentIntensity = 0.6;
     pmrem.dispose();
   } catch (e) { /* no reflections: fine */ }
   placeRoadProps(world, phys.props);
@@ -429,7 +429,7 @@ async function boot() {
 
   // ---------- per-frame effects (player car)
   const fxState = [0, 1, 2, 3].map(() => ({ acc: 0, chip: 0 }));
-  const DUST = ['#5a5a60', '#d6b08a', '#f2f5fb', '#c9bb8e', '#ebc28e', '#f7f9fd', '#b9aea4', '#e2f2f8'];
+  const DUST = ['#5a5a60', '#e8c9a0', '#f4f7fc', '#d6c79a', '#f2d1a2', '#f8fafd', '#c9beb4', '#e6f4f9'];
   function wheelEffects(dt, c, trackIdx) {
     for (let i = 0; i < 4; i++) {
       const w = c.wheels[i];
@@ -448,7 +448,7 @@ async function boot() {
       const wf = fxState[i];
       let rate = 0;
       if (s === S.ASPHALT) rate = w.slip > 0.3 ? w.slip * 26 : 0;
-      else if (soft) rate = sp * (s === S.SNOW || s === S.SAND ? 1.2 : snowy ? 0.9 : s === S.GRASS ? 0.35 : 0.85) + w.slip * 22;
+      else if (soft) rate = sp * (s === S.SNOW || s === S.SAND ? 0.6 : snowy ? 0.45 : s === S.GRASS ? 0.18 : 0.42) + w.slip * 12;
       wf.acc += dt * rate;
       while (wf.acc > 1) {
         wf.acc -= 1;

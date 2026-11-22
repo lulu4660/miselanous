@@ -2,14 +2,14 @@
 // strata on steep rock, and the roads painted from the baked road-distance field
 // (asphalt with edge lines, dirt with ruts, packed snow), plus the frozen lake.
 import * as THREE from 'three';
-import { patchMaterial } from './shaders.js';
+import { patchMaterial, U } from './shaders.js';
 import { createNoise2D } from '../noise.js';
 import { S } from '../vehicles.js';
 
 const C = (h) => new THREE.Color(h);
 const COL = {
   snow: C('#eef3fb'), snowShade: C('#d6e0f2'), snowRock: C('#8e8fa3'),
-  grass: C('#86b45c'), grassDry: C('#a8b65e'), grassDeep: C('#5f9a4e'), hillRock: C('#9b9886'),
+  grass: C('#86b45c'), grassDry: C('#a8b65e'), grassDeep: C('#5f9a4e'), hillRock: C('#9b9886'), grassSun: C('#b4c45a'), grassShade: C('#4f8c6e'),
   sand: C('#e0a86a'), sandRed: C('#cf8152'), dirtGround: C('#b98055'), canyon: C('#c4704a'),
   ice: C('#bfe3f2'),
 };
@@ -17,6 +17,7 @@ const COL = {
 export function createTerrainMesh(world, { chunk = 20 } = {}) {
   const { V, N, cell, half, heights, bsnow, basph, bdirt, roadDist, roadType, roadIdx, ground } = world;
   const noise = createNoise2D(77);
+  const sunD = U.uSunDir.value;
   const group = new THREE.Group();
 
   const normals = new Float32Array(V * V * 3), colors = new Float32Array(V * V * 3);
@@ -33,6 +34,9 @@ export function createTerrainMesh(world, { chunk = 20 } = {}) {
     const n1 = noise(x * 0.02, z * 0.02) * 0.5 + 0.5, n2 = noise(x * 0.09 + 5, z * 0.09) * 0.5 + 0.5;
     t1.copy(COL.snow).lerp(COL.snowShade, n2 * 0.6);
     t2.copy(COL.grass).lerp(COL.grassDry, n1).lerp(COL.grassDeep, n2 * 0.4);
+    // slopes facing the low sun go yellow-green, the shaded ones cool blue-green
+    const ndl = (-dx * sunD.x + sunD.y - dz * sunD.z) / l;
+    t2.lerp(ndl > 0.55 ? COL.grassSun : COL.grassShade, Math.min(1, Math.abs(ndl - 0.55) * 1.6) * 0.5);
     t3.copy(ground[k] === S.SAND ? COL.sand : COL.dirtGround).lerp(COL.sandRed, n1 * 0.6);
     c.setRGB(t1.r * bsnow[k] + t2.r * basph[k] + t3.r * bdirt[k], t1.g * bsnow[k] + t2.g * basph[k] + t3.g * bdirt[k], t1.b * bsnow[k] + t2.b * basph[k] + t3.b * bdirt[k]);
     if (ground[k] === S.ICE) c.copy(COL.ice);
@@ -170,7 +174,7 @@ export function createTerrainMesh(world, { chunk = 20 } = {}) {
     group.add(mesh);
   }
   // far ground beyond the map edge (continuation of the enclosing ridge, in the haze)
-  const ring = new THREE.Mesh(new THREE.RingGeometry(half * 0.98, 3000, 64, 1).rotateX(-Math.PI / 2).translate(0, 40, 0), new THREE.MeshLambertMaterial({ color: '#b7a5b8' }));
+  const ring = new THREE.Mesh(new THREE.RingGeometry(half * 0.98, 3000, 64, 1).rotateX(-Math.PI / 2).translate(0, -4, 0), new THREE.MeshLambertMaterial({ color: '#b7a5b8' }));
   group.add(ring);
   return { group, material: mat };
 }

@@ -178,8 +178,23 @@ export function createVehicleModel(spec, livery) {
   body.add(wheelMesh);
   const wInfo = spec.wheels.map((w) => {
     const k = w.radius / WHEEL_R;
-    return { cfg: w, scale: new THREE.Vector3(spec.id === 'bison' ? 1.05 : 0.9 * Math.max(0.95, k), k, k), flip: w.x < 0 ? Math.PI : 0, top: w.y + 0.08, sx: w.x * 0.8, sz: w.z + (w.front ? -0.1 : 0.1) };
+    return { cfg: w, scale: new THREE.Vector3((spec.id === 'bison' ? 1.05 : 0.9 * Math.max(0.95, k)) * 1.3, k, k), flip: w.x < 0 ? Math.PI : 0, top: w.y + 0.08, sx: w.x * 0.8, sz: w.z + (w.front ? -0.1 : 0.1) };
   });
+  // soft contact shadow under the car (grounds it where the shadow map is coarse)
+  if (!shared.blobTex) {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+    const g2 = cv.getContext('2d'), gr = g2.createRadialGradient(32, 32, 4, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.3)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g2.fillStyle = gr; g2.fillRect(0, 0, 64, 64);
+    shared.blobTex = new THREE.CanvasTexture(cv);
+    shared.blobGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  }
+  const B0 = spec.box, w0 = spec.wheels[0];
+  const blob = new THREE.Mesh(shared.blobGeo, new THREE.MeshBasicMaterial({ map: shared.blobTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, fog: true }));
+  blob.scale.set((B0.maxX - B0.minX) * 1.45, 1, (B0.maxZ - B0.minZ) * 1.12);
+  blob.position.y = w0.y - spec.restLength * 0.75 - w0.radius + 0.04;
+  blob.renderOrder = 1;
+  body.add(blob);
   const shockMesh = new THREE.InstancedMesh(makeShockGeo(), M.shock, nW);
   shockMesh.frustumCulled = false;
   body.add(shockMesh);
@@ -190,7 +205,7 @@ export function createVehicleModel(spec, livery) {
     const W = wInfo[i];
     _e.set(cw.spin, cw.steerAngle + W.flip, 0);
     _q.setFromEuler(_e);
-    _p.set(cw.x, cw.y - cw.suspLen, cw.z);
+    _p.set(cw.x + Math.sign(cw.x) * 0.08, cw.y - cw.suspLen, cw.z); // (track a little wider than the body: a planted stance)
     _m.compose(_p, _q, W.scale);
     wheelMesh.setMatrixAt(i, _m);
     const hubY = cw.y - cw.suspLen + 0.02, L2 = Math.max(0.08, W.top - hubY);
@@ -213,7 +228,7 @@ export function createVehicleModel(spec, livery) {
     dispose() {
       shell.geometry.dispose(); glass.geometry.dispose(); lights.geometry.dispose();
       if (antGeo) antGeo.dispose();
-      paint.mat.dispose(); lit.mat.dispose();
+      paint.mat.dispose(); lit.mat.dispose(); blob.material.dispose();
       wheelMesh.dispose(); shockMesh.dispose(); // instance buffers only; shared geometries stay cached
     },
     sync(car, dt) {
