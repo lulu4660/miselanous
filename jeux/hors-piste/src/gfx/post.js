@@ -16,7 +16,7 @@ import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 // keep a sharp band around the focus line, blur grows beyond it
 function withFocusBand(shader) {
   const s = THREE.UniformsUtils.clone ? { ...shader, uniforms: THREE.UniformsUtils.clone(shader.uniforms) } : shader;
-  s.uniforms.band = { value: 0.3 };
+  s.uniforms.band = { value: 0.4 };
   s.fragmentShader = shader.fragmentShader
     .replace('uniform float r;', 'uniform float r;\nuniform float band;')
     .replace(/abs\(\s*r\s*-\s*vUv\.y\s*\)/g, 'max( 0.0, abs( r - vUv.y ) - band )');
@@ -94,8 +94,8 @@ export function createPost(renderer, scene, camera) {
       composer.setSize(w, h);
       bloom.resolution.set(w * pr / 2, h * pr / 2);
       const pw = Math.max(1, w * pr);
-      tiltH.uniforms.h.value = 2.0 / pw;
-      tiltV.uniforms.v.value = 2.0 / (h * pr);
+      tiltH.uniforms.h.value = 1.3 / pw;
+      tiltV.uniforms.v.value = 1.3 / (h * pr);
       grade.uniforms.uAspect.value = w / h;
       fxaa.uniforms.resolution.value.set(1 / pw, 1 / Math.max(1, h * pr));
     },

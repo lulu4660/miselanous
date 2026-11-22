@@ -45,7 +45,7 @@ async function boot() {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.aa, powerPreference: 'high-performance', preserveDrawingBuffer: params.has('shot') });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = 1.15;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   let renderScale = quality.scale, maxScale = 1, upCooldown = 4;
@@ -76,11 +76,12 @@ async function boot() {
   const phys = createPhysics(world);
 
   // ---------- lights
-  const hemi = new THREE.HemisphereLight('#b4c0f0', '#e6d4b2', 1.15);
+  // late afternoon: a warm low sun, cool sky fill, warm bounce from the ground
+  const hemi = new THREE.HemisphereLight('#b3c6ef', '#cfb28c', 0.95);
   scene.add(hemi);
-  const sunDir = new THREE.Vector3(-0.5, 0.52, 0.69).normalize();
+  const sunDir = new THREE.Vector3(-0.5, 0.45, 0.74).normalize();
   U.uSunDir.value.copy(sunDir);
-  const sun = new THREE.DirectionalLight('#ffe2bc', 4.0);
+  const sun = new THREE.DirectionalLight('#ffd9ae', 4.3);
   sun.castShadow = true;
   sun.shadow.mapSize.set(quality.shadow, quality.shadow);
   const SH = 46;
@@ -95,12 +96,21 @@ async function boot() {
   const veg = createVegetation(world, quality);
   scene.add(veg.group);
   for (const o of veg.obstacles) phys.addObstacle(o);
-  const sky = createSky();
+  const sky = createSky(world);
   scene.add(sky.group);
+  // reflections for the car paint and glass: a pre-filtered copy of the sky
+  try {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envScene = new THREE.Scene();
+    envScene.add(new THREE.Mesh(sky.dome.geometry, sky.dome.material));
+    scene.environment = pmrem.fromScene(envScene, 0.04, 0.1, 3000).texture;
+    scene.environmentIntensity = 0.85;
+    pmrem.dispose();
+  } catch (e) { /* no reflections: fine */ }
   placeRoadProps(world, phys.props);
   const propMeshes = createPropMeshes(phys.props);
   scene.add(propMeshes.root);
-  particles = createParticles(1100);
+  particles = createParticles(tierName === 'high' ? 1600 : 1200);
   scene.add(particles.points);
   const tracks = createTracks(4, 520);
   scene.add(tracks.group);
@@ -376,15 +386,21 @@ async function boot() {
   }
 
   // ---------- biome mood: fog colour and grade follow where you are
-  const FOG = { snow: new THREE.Color('#cdd7ea'), asph: new THREE.Color('#e3d6c0'), dirt: new THREE.Color('#efc6a2') };
+  const FOG = { snow: new THREE.Color('#d2dcec'), asph: new THREE.Color('#e4dccb'), dirt: new THREE.Color('#efcfaa') };
+  const FOG_SUN = new THREE.Color('#ffd3a0'), camFwd = new THREE.Vector3();
   const fogTarget = new THREE.Color(), bwCam = [0, 0, 0];
-  const SKY_HORIZON = { snow: new THREE.Color('#d9e2f2'), asph: new THREE.Color('#ffd9b4'), dirt: new THREE.Color('#ffc69e') };
+  const SKY_HORIZON = { snow: new THREE.Color('#e2e8f3'), asph: new THREE.Color('#f1dcc2'), dirt: new THREE.Color('#f6d2ac') };
   const skyTarget = new THREE.Color();
   const mix3 = (out, C, w) => out.setRGB(C.snow.r * w[0] + C.asph.r * w[1] + C.dirt.r * w[2], C.snow.g * w[0] + C.asph.g * w[1] + C.dirt.g * w[2], C.snow.b * w[0] + C.asph.b * w[1] + C.dirt.b * w[2]);
   function updateMood(dt) {
     world.biomeWeights(camera.position.x, camera.position.z, bwCam);
     mix3(fogTarget, FOG, bwCam);
+    // looking toward the sun the haze glows warm (forward scattering), away from it it stays cool
+    camera.getWorldDirection(camFwd);
+    const toSun = Math.max(0, (camFwd.x * sunDir.x + camFwd.z * sunDir.z) / Math.max(1e-3, Math.hypot(sunDir.x, sunDir.z)));
+    fogTarget.lerp(FOG_SUN, toSun * toSun * 0.35);
     scene.fog.color.lerp(fogTarget, Math.min(1, dt * 1.5));
+    sky.haze.value.copy(scene.fog.color);
     const hz = sky.dome.material.uniforms.cHorizon?.value;
     if (hz) hz.lerp(mix3(skyTarget, SKY_HORIZON, bwCam), Math.min(1, dt * 1.5));
     if (post?.passes?.grade) {
@@ -395,8 +411,8 @@ async function boot() {
   }
 
   // ---------- per-frame effects (player car)
-  const fxState = car.wheels.map(() => ({ acc: 0 }));
-  const DUST = ['#5a5a60', '#b88a62', '#e6edf7', '#b7a77a', '#e0b07a', '#f4f7fd', '#a59a90', '#d8eef6'];
+  const fxState = [0, 1, 2, 3].map(() => ({ acc: 0, chip: 0 }));
+  const DUST = ['#5a5a60', '#d6b08a', '#f2f5fb', '#c9bb8e', '#ebc28e', '#f7f9fd', '#b9aea4', '#e2f2f8'];
   function wheelEffects(dt, c, trackIdx) {
     for (let i = 0; i < 4; i++) {
       const w = c.wheels[i];
@@ -409,11 +425,23 @@ async function boot() {
           tracks.add(i, w.contact.x, w.contact.y, w.contact.z, c.vel.x, c.vel.z, w.radius * 0.75, str, phys.time);
         } else tracks.cut(i);
       }
-      const rate = (s === S.ASPHALT ? (w.slip > 0.35 ? w.slip * 30 : 0) : soft ? sp * (s === S.SNOW || s === S.SAND ? 0.9 : 0.55) + w.slip * 20 : 0);
-      fxState[i].acc += dt * rate;
-      while (fxState[i].acc > 1) {
-        fxState[i].acc -= 1;
-        particles.dust(w.contact.x, w.contact.y, w.contact.z, c.vel.x, c.vel.z, DUST[s]);
+      // effects by surface: smoke on tarmac slides, dust (and gravel) on dirt, sand and grass,
+      // powder and lumps on snow
+      const snowy = s === S.SNOW || s === S.SNOWROAD;
+      const wf = fxState[i];
+      let rate = 0;
+      if (s === S.ASPHALT) rate = w.slip > 0.3 ? w.slip * 26 : 0;
+      else if (soft) rate = sp * (s === S.SNOW || s === S.SAND ? 1.2 : snowy ? 0.9 : s === S.GRASS ? 0.35 : 0.85) + w.slip * 22;
+      wf.acc += dt * rate;
+      while (wf.acc > 1) {
+        wf.acc -= 1;
+        if (s === S.ASPHALT) particles.smoke(w.contact.x, w.contact.y, w.contact.z, c.vel.x, c.vel.z);
+        else particles.dust(w.contact.x, w.contact.y, w.contact.z, c.vel.x, c.vel.z, DUST[s], snowy ? 0.9 : 1);
+      }
+      // thrown gravel / snow lumps when the tyre works hard
+      if (soft && s !== S.GRASS && (w.slip > 0.25 || (sp > 9 && !w.front))) {
+        wf.chip = (wf.chip || 0) + dt * (w.slip * 30 + sp * 0.15);
+        while (wf.chip > 1) { wf.chip -= 1; particles.chips(w.contact.x, w.contact.y, w.contact.z, c.vel.x, c.vel.z, snowy ? '#f4f7fd' : s === S.SAND ? '#c99a66' : '#6f5644'); }
       }
     }
   }
@@ -495,6 +523,7 @@ async function boot() {
     particles.update(dt);
     tracks.update(phys.time, scene.fog);
     birds.update(game.time, dt, car.pos);
+    sky.dome.position.copy(camera.position); // the sky is infinitely far: centre it on the eye
     updateCamera(dt);
     updateMood(dt);
     snowfall(dt);

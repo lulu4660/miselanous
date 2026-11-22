@@ -227,6 +227,36 @@ export function createVegetation(world, quality) {
   add(greenGeo, grassMat, greens, { chunk: 50 });
   add(dryGeo, grassMat, drys, { chunk: 50 });
 
+  // --- wild flowers in the green hills, in drifts along the verges (instance colour = petal tint)
+  const flowerGeo = (() => {
+    const parts = [];
+    for (let k = 0; k < 5; k++) {
+      const a = rnd() * 6.28, r = rnd() * 0.22, h = 0.28 + rnd() * 0.3;
+      const stem = new THREE.CylinderGeometry(0.012, 0.016, h, 3); place(stem, { x: Math.cos(a) * r, y: h / 2, z: Math.sin(a) * r });
+      colorize(stem, '#4f8a3c'); parts.push(stem);
+      const head = new THREE.IcosahedronGeometry(0.055 + rnd() * 0.03, 0); place(head, { x: Math.cos(a) * r, y: h + 0.02, z: Math.sin(a) * r });
+      colorize(head, '#ffffff'); parts.push(head);
+    }
+    const g = merge(parts);
+    g.setAttribute('aSway', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(1), 1));
+    return g;
+  })();
+  const flowers = [];
+  const PETALS = ['#f6f1e6', '#ffd44a', '#c98bdc', '#ff8a6a', '#8fb8ff'];
+  for (let k = 0; k < quality.grass * 2 && flowers.length < quality.grass * 0.35; k++) {
+    const [cx, cz] = sample(0.85, 22);
+    world.biomeWeights(cx, cz, bw);
+    if (bw[1] < 0.6 || !free(cx, cz, 5.2)) continue;
+    const hue = PETALS[Math.floor(rnd() * PETALS.length)];
+    const n = 2 + Math.floor(rnd() * 5);
+    for (let q = 0; q < n; q++) {
+      const x = cx + (rnd() - 0.5) * 3, z = cz + (rnd() - 0.5) * 3;
+      if (!free(x, z, 5)) continue;
+      flowers.push({ x, z, y: world.heightAt(x, z) - 0.02, s: 0.8 + rnd() * 0.5, rot: rnd() * 6.28, hue });
+    }
+  }
+  add(flowerGeo, grassMat, flowers, { chunk: 50, color: (it) => it.hue });
+
   // --- roadside markers: reflector posts on asphalt, striped snow poles, wooden fence posts on dirt
   const postMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true }), { cutout: 1 });
   const reflector = (() => {

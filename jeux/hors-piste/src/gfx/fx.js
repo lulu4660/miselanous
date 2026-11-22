@@ -31,7 +31,9 @@ export function createParticles(max = 900) {
       void main() {
         vec2 c = gl_PointCoord - 0.5;
         float d = length(c);
-        float a = smoothstep(0.5, 0.18, d) * vAlpha;
+        // soft puff with a little irregularity (big particles read as dust, not as discs)
+        float wob = 0.86 + 0.14 * sin(atan(c.y, c.x) * 5.0 + vAlpha * 40.0);
+        float a = pow(max(0.0, 1.0 - d / (0.5 * wob)), 1.8) * vAlpha;
         if (a < 0.01) discard;
         gl_FragColor = vec4(vColor, a);
         #include <colorspace_fragment>
@@ -82,11 +84,30 @@ export function createParticles(max = 900) {
         max: 0.45 + Math.random() * 0.45, s0: 0.14 + Math.random() * 0.2 * amount, s1: 0.05, color: Math.random() < 0.8 ? '#ffffff' : '#c8f1ee', type: 1,
       });
     },
-    dust(x, y, z, vx, vz, color = '#ead2a8') {
+    // billowing dust (or snow powder): grows, rises a little, lingers behind the car
+    dust(x, y, z, vx, vz, color = '#ead2a8', big = 1) {
       spawn({
-        x: x + (Math.random() - 0.5) * 0.3, y: y + 0.1, z: z + (Math.random() - 0.5) * 0.3,
-        vx: vx * 0.15 + (Math.random() - 0.5) * 0.8, vy: 0.4 + Math.random() * 0.8, vz: vz * 0.15 + (Math.random() - 0.5) * 0.8,
-        max: 0.9 + Math.random() * 0.8, s0: 0.25, s1: 0.9 + Math.random() * 0.7, a0: 0.26, grav: -0.15, drag: 1.6, color, type: 2,
+        x: x + (Math.random() - 0.5) * 0.4, y: y + 0.15, z: z + (Math.random() - 0.5) * 0.4,
+        vx: vx * 0.18 + (Math.random() - 0.5) * 1.2, vy: 0.5 + Math.random() * 1.1, vz: vz * 0.18 + (Math.random() - 0.5) * 1.2,
+        max: (1.4 + Math.random() * 1.2) * big, s0: 0.45, s1: (1.8 + Math.random() * 1.5) * big, a0: 0.46, grav: -0.12, drag: 1.4, color, type: 2,
+      });
+    },
+    // gravel / snow lumps thrown back by a spinning or sliding tyre
+    chips(x, y, z, vx, vz, color = '#7a6250') {
+      const l = Math.hypot(vx, vz) || 1;
+      spawn({
+        x: x + (Math.random() - 0.5) * 0.3, y: y + 0.12, z: z + (Math.random() - 0.5) * 0.3,
+        vx: vx * 0.35 - (vx / l) * (1 + Math.random() * 3) + (Math.random() - 0.5) * 2.5, vy: 1.5 + Math.random() * 3.5,
+        vz: vz * 0.35 - (vz / l) * (1 + Math.random() * 3) + (Math.random() - 0.5) * 2.5,
+        max: 0.5 + Math.random() * 0.5, s0: 0.07 + Math.random() * 0.06, s1: 0.06, a0: 1, grav: 9.8, drag: 0.4, color, type: 1,
+      });
+    },
+    // tyre smoke on tarmac: big, slow, pale
+    smoke(x, y, z, vx, vz, color = '#d9d6dc') {
+      spawn({
+        x: x + (Math.random() - 0.5) * 0.3, y: y + 0.25, z: z + (Math.random() - 0.5) * 0.3,
+        vx: vx * 0.1 + (Math.random() - 0.5) * 0.6, vy: 0.5 + Math.random() * 0.6, vz: vz * 0.1 + (Math.random() - 0.5) * 0.6,
+        max: 1.8 + Math.random() * 1.2, s0: 0.5, s1: 2.6 + Math.random() * 1.4, a0: 0.32, grav: -0.08, drag: 0.9, color, type: 2,
       });
     },
     sparkle(x, y, z, n = 40) {

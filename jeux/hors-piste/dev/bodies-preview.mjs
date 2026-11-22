@@ -15,78 +15,81 @@ const root = resolve(import.meta.dirname, '..');
 const entry = `
 import * as THREE from 'three';
 import { VEHICLES } from './src/vehicles.js';
-import { buildBody } from './src/gfx/bodies.js';
+import { createVehicleModel } from './src/gfx/carModel.js';
 const ids = ${JSON.stringify(ids)};
 const ZOOM = ${process.env.Z ? 1 : 0};
-const CW = ZOOM ? 960 : 480, CH = ZOOM ? 660 : 330, VIEWS = 4;
+const DIRT = ${process.env.DIRT ? Number(process.env.DIRT) : 0};
+const BRAKE = ${process.env.BRAKE ? 1 : 0};
+const CW = ZOOM ? 960 : 480, CH = ZOOM ? 660 : 330;
 const COLS = ZOOM ? 2 : 4, ROWS_PER = ZOOM ? 2 : 1;
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(1);
 renderer.setSize(CW * COLS, CH * ROWS_PER * ids.length);
 renderer.setScissorTest(true);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
 document.body.style.margin = '0';
 document.body.appendChild(renderer.domElement);
-const info = {};
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#bfd9e8');
-scene.add(new THREE.HemisphereLight('#ffffff', '#8a8f78', 1.1));
-const sun = new THREE.DirectionalLight('#fff4e0', 2.2); sun.position.set(-4, 8, 5); scene.add(sun);
-const sun2 = new THREE.DirectionalLight('#dfe8ff', 0.8); sun2.position.set(5, 3, -6); scene.add(sun2);
-const matShell = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 });
-const matGlass = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.12, metalness: 0.3 });
-const matLight = new THREE.MeshBasicMaterial({ vertexColors: true });
-const matBrake = new THREE.MeshBasicMaterial({ color: '#ff3b30', transparent: true, opacity: 0.35 });
-const matTyre = new THREE.MeshStandardMaterial({ color: '#2b2730', roughness: 0.9 });
-const matHub = new THREE.MeshStandardMaterial({ color: '#d8cdb8', roughness: 0.5 });
-const tris = (g) => (g.index ? g.index.count : g.attributes.position.count) / 3;
-ids.forEach((id, row) => {
-  const spec = VEHICLES[id];
-  const grp = new THREE.Group();
-  const b = buildBody(id, spec.livery);
-  info[id] = { shell: tris(b.shell), glass: tris(b.glass), lights: tris(b.lights), brake: tris(b.brake), antenna: b.antenna };
-  info[id].total = info[id].shell + info[id].glass + info[id].lights + info[id].brake;
-  grp.add(new THREE.Mesh(b.shell, matShell), new THREE.Mesh(b.glass, matGlass), new THREE.Mesh(b.lights, matLight), new THREE.Mesh(b.brake, matBrake));
-  if (b.antenna) { const a = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.012, 0.6, 5).translate(0, 0.3, 0), new THREE.MeshBasicMaterial({ color: '#000' })); a.position.set(b.antenna.x, b.antenna.y, b.antenna.z); grp.add(a); }
-  let low = 9;
-  for (const w of spec.wheels) {
-    const yc = w.y - spec.restLength * 0.7;
-    low = Math.min(low, yc - w.radius);
-    const ww = id === 'bison' ? 0.3 : 0.24;
-    const t = new THREE.Mesh(new THREE.CylinderGeometry(w.radius, w.radius, ww, 20).rotateZ(Math.PI / 2), matTyre);
-    t.position.set(w.x, yc, w.z);
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(w.radius * 0.6, w.radius * 0.6, ww + 0.02, 14).rotateZ(Math.PI / 2), matHub);
-    hub.position.copy(t.position);
-    grp.add(t, hub);
+// sky-ish environment (PMREM) like the game will provide
+{
+  const envScene = new THREE.Scene();
+  const sg = new THREE.SphereGeometry(50, 24, 16);
+  const cols = [];
+  const p = sg.attributes.position, c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i) / 50;
+    if (y > 0) c.set('#9cc8ee').lerp(new THREE.Color('#e8f3ff'), 1 - Math.pow(y, 0.6)); else c.set('#e8f3ff').lerp(new THREE.Color('#8a826c'), Math.min(1, -y * 2.2));
+    cols.push(c.r, c.g, c.b);
   }
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: '#8b7d63', roughness: 1 }));
-  ground.rotation.x = -Math.PI / 2; ground.position.y = low;
-  const bx = spec.box; // wire box for the spec bounds
-  const bb = new THREE.Box3(new THREE.Vector3(bx.minX, bx.minY, bx.minZ), new THREE.Vector3(bx.maxX, bx.maxY, bx.maxZ));
-  const helper = new THREE.Box3Helper(bb, '#ff00ff'); helper.visible = ${process.env.BOX ? 'true' : 'false'};
-  const sceneGroup = new THREE.Group(); sceneGroup.add(grp, ground, helper);
-  sceneGroup.userData = { id, low };
-  scene.add(sceneGroup);
-  sceneGroup.visible = false;
-  grp.userData.row = row;
+  sg.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  envScene.add(new THREE.Mesh(sg, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+  const sunM = new THREE.Mesh(new THREE.SphereGeometry(6, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(14, 12, 9) }));
+  sunM.position.set(-30, 35, 25); envScene.add(sunM);
+  const pm = new THREE.PMREMGenerator(renderer);
+  scene.environment = pm.fromScene(envScene, 0.02).texture; scene.environmentIntensity = 0.85; renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = 1.15;
+}
+scene.add(new THREE.HemisphereLight('#ffffff', '#8a8f78', 0.5));
+const sun = new THREE.DirectionalLight('#fff4e0', 2.0); sun.position.set(-4, 8, 5); scene.add(sun);
+const tris = (m) => { let t = 0; m.traverse((o) => { if (o.isMesh && o.visible) { const g = o.geometry; t += ((g.index ? g.index.count : g.attributes.position.count) / 3) * (o.isInstancedMesh ? o.count : 1); } }); return t; };
+const calls = (m) => { let t = 0; m.traverse((o) => { if (o.isMesh && o.visible) t++; }); return t; };
+const info = {};
+const fakeCar = (spec) => ({
+  rpos: { x: 0, y: 0, z: 0 }, rq: { x: 0, y: 0, z: 0, w: 1 }, pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 },
+  wheels: spec.wheels.map((w) => ({ x: w.x, y: w.y, z: w.z, suspLen: spec.restLength * 0.7, spin: 0.3, steerAngle: 0 })),
+  throttle: BRAKE ? -1 : 0, brake: BRAKE ? 1 : 0, forwardSpeed: 5, speed: 5, input: { handbrake: false },
 });
+ids.forEach((id) => {
+  const spec = VEHICLES[id];
+  const model = createVehicleModel(spec, spec.livery);
+  const car = fakeCar(spec);
+  for (let i = 0; i < 20; i++) model.sync(car, 0.05);
+  if (model.setDirt && DIRT > 0) model.setDirt(DIRT, '#7a5a3a');
+  let low = 9;
+  for (const w of spec.wheels) low = Math.min(low, w.y - spec.restLength * 0.7 - w.radius);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: '#8b7d63', roughness: 1 }));
+  ground.rotation.x = -Math.PI / 2; ground.position.y = low; ground.receiveShadow = true;
+  const g = new THREE.Group(); g.add(model.root, ground); g.userData = { id, low };
+  g.visible = false; scene.add(g);
+  info[id] = { tris: tris(model.root), calls: calls(model.root) };
+});
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 1, far: 30 });
 const groups = scene.children.filter((c) => c.userData && c.userData.id);
 const cam = new THREE.PerspectiveCamera(28, CW / CH, 0.1, 100);
 const tgt = new THREE.Vector3(0, 0.15, 0);
-const views = [
-  { p: [-6.2, 3.2, 7.0] },   // front 3/4 (car front is +z; left side is +x, so view from +x... mirrored below)
-  { p: [6.4, 3.0, -7.0] },  // rear 3/4
-  { p: [11, 0.9, 0] },      // side (car left)
-  { p: [0, 15, 0.01] },     // top
-];
-views[0].p = [6.2, 3.0, 7.2];
+const views = [{ p: [6.2, 3.0, 7.2] }, { p: [6.4, 3.0, -7.0] }, { p: [11, 0.9, 0] }, { p: [-5.5, 1.6, 7.5] }];
+const ex = ${process.env.VIEW ? JSON.stringify(process.env.VIEW.split(',').map(Number)) : 'null'};
+if (ex) views[3] = { p: ex };
 function render() {
   renderer.setClearColor('#bfd9e8');
   groups.forEach((g, row) => {
     groups.forEach((o) => (o.visible = o === g));
     views.forEach((v, col) => {
       cam.position.set(...v.p);
-      if (col === 3) cam.up.set(0, 0, 1); else cam.up.set(0, 1, 0);
-      cam.fov = col === 3 ? 22 : 28; cam.updateProjectionMatrix();
+      cam.fov = 28; cam.updateProjectionMatrix();
       cam.lookAt(tgt);
       const x = (col % COLS) * CW, y = (ids.length * ROWS_PER - 1 - (row * ROWS_PER + Math.floor(col / COLS))) * CH;
       renderer.setViewport(x, y, CW, CH); renderer.setScissor(x, y, CW, CH);
@@ -115,7 +118,7 @@ await page.goto('file://' + htmlPath);
 try { await page.waitForFunction(() => window.__done, null, { timeout: 60000 }); } catch (e) { console.log('timeout'); }
 await page.screenshot({ path: out });
 const info = await page.evaluate(() => window.__info);
-for (const [id, i] of Object.entries(info || {})) console.log(id.padEnd(8), 'tris total', i.total, '(shell', i.shell, 'glass', i.glass, 'lights', i.lights, 'brake', i.brake + ')', 'antenna', JSON.stringify(i.antenna));
+for (const [id, i] of Object.entries(info || {})) console.log(id.padEnd(8), 'tris', i.tris, 'draw calls', i.calls);
 if (logs.length) console.log(logs.join('\n'));
 await browser.close();
 console.log('wrote', out);

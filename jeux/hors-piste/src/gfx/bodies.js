@@ -373,5 +373,24 @@ export function buildBody(id, livery) {
   const fn = BUILDERS[id];
   if (!fn) throw new Error('buildBody: unknown vehicle ' + id);
   const L = livery || VEHICLES[id].livery;
-  return fn(L);
+  return finish(fn(L));
 }
+
+// Post-process: bake a soft vertical gradient into the paint (cheap ambient occlusion: darker sills, lighter roof) and
+// fold the brake-glow overlay into the lights geometry (attribute aBrk = 1 on the overlay; carModel's lights material
+// hides it unless braking). Returns { shell, glass, lights, antenna } (no separate `brake` any more).
+function finish(r) {
+  const g = r.shell, p = g.attributes.position, n = g.attributes.normal, c = g.attributes.color;
+  for (let i = 0; i < p.count; i++) {
+    const ao = 0.74 + 0.26 * smooth(-0.3, 0.38, p.getY(i));
+    const up = 0.9 + 0.1 * (n.getY(i) * 0.5 + 0.5);
+    const k = ao * up;
+    c.setXYZ(i, c.getX(i) * k, c.getY(i) * k, c.getZ(i) * k);
+  }
+  const nl = r.lights.attributes.position.count, nb = r.brake.attributes.position.count;
+  const lights = merge([r.lights, r.brake]);
+  const flag = new Float32Array(nl + nb); flag.fill(1, nl);
+  lights.setAttribute('aBrk', new THREE.BufferAttribute(flag, 1));
+  return { shell: g, glass: r.glass, lights, antenna: r.antenna };
+}
+function smooth(a, b, x) { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }

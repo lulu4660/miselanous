@@ -15,12 +15,12 @@ const COL = {
 };
 
 export function createTerrainMesh(world, { chunk = 20 } = {}) {
-  const { V, N, cell, half, heights, bsnow, basph, bdirt, roadDist, roadType, ground } = world;
+  const { V, N, cell, half, heights, bsnow, basph, bdirt, roadDist, roadType, roadIdx, ground } = world;
   const noise = createNoise2D(77);
   const group = new THREE.Group();
 
   const normals = new Float32Array(V * V * 3), colors = new Float32Array(V * V * 3);
-  const rock = new Float32Array(V * V), road = new Float32Array(V * V * 2);
+  const rock = new Float32Array(V * V), road = new Float32Array(V * V * 2), roadS = new Float32Array(V * V);
   const H = (i, j) => heights[Math.min(V - 1, Math.max(0, j)) * V + Math.min(V - 1, Math.max(0, i))];
   const c = new THREE.Color(), t1 = new THREE.Color(), t2 = new THREE.Color(), t3 = new THREE.Color();
   for (let j = 0; j < V; j++) for (let i = 0; i < V; i++) {
@@ -41,22 +41,46 @@ export function createTerrainMesh(world, { chunk = 20 } = {}) {
     colors[k * 3] = c.r; colors[k * 3 + 1] = c.g; colors[k * 3 + 2] = c.b;
     road[k * 2] = Math.min(roadDist[k], 40);
     road[k * 2 + 1] = roadType[k];
+    // distance along the road (for the dashed centre line on tarmac)
+    if (roadIdx[k] >= 0 && roadDist[k] < 8) {
+      const R = world.roads[Math.floor(roadIdx[k] / 100000)], si = roadIdx[k] % 100000, P = R.pts;
+      const a = P[si], b = P[(si + 1) % P.length];
+      const ex = b.x - a.x, ez = b.z - a.z, L2 = ex * ex + ez * ez || 1;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / L2));
+      roadS[k] = a.s + t * Math.sqrt(L2);
+      // signed distance: interpolates linearly through the centre line (the unsigned one
+      // has a V-shaped minimum the 2.5 m mesh cannot resolve)
+      if (ex * (z - a.z) - ez * (x - a.x) < 0) road[k * 2] = -road[k * 2];
+    }
   }
 
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   patchMaterial(mat, {
     detail: 1, cutout: 2,
     extraVert: (s) => s
-      .replace('#include <common>', '#include <common>\nattribute float aRock;\nattribute vec2 aRoad;\nattribute vec3 aBiome;\nvarying float vRock;\nvarying vec2 vRoad;\nvarying vec3 vBiome;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRock = aRock; vRoad = aRoad; vBiome = aBiome;'),
+      .replace('#include <common>', '#include <common>\nattribute float aRock;\nattribute vec2 aRoad;\nattribute vec3 aBiome;\nattribute float aRoadS;\nvarying float vRock;\nvarying vec2 vRoad;\nvarying vec3 vBiome;\nvarying float vRoadS;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRock = aRock; vRoad = aRoad; vBiome = aBiome; vRoadS = aRoadS;'),
     extraFrag: (s) => s
-      .replace('#include <common>', '#include <common>\nvarying float vRock;\nvarying vec2 vRoad;\nvarying vec3 vBiome;')
+      .replace('#include <common>', '#include <common>\nvarying float vRock;\nvarying vec2 vRoad;\nvarying vec3 vBiome;\nvarying float vRoadS;')
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n      totalEmissiveRadiance += vec3(0.95, 0.97, 1.0) * mbSpark;')
       .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
       if (vRock > 0.35) {
         vec3 fN = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
         normal = normalize(mix(normal, fN, smoothstep(0.35, 0.8, vRock) * 0.5));
       }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
+      float mbSpark = 0.0;
+      {
+        // ground detail (no textures): grass tone patches, gravel specks on dirt, snow glitter
+        float nA = texture2D(uNoise, vMbWorld.xz * 0.045).g;
+        float nB = texture2D(uNoise, vMbWorld.xz * 0.6).b;
+        float nC = texture2D(uNoise, vMbWorld.xz * 2.3 + 0.37).a;
+        diffuseColor.rgb *= 1.0 + vBiome.y * ((nA - 0.5) * 0.22 + (nB - 0.5) * 0.08);
+        diffuseColor.rgb *= 1.0 + vBiome.z * ((smoothstep(0.62, 0.74, nC) - smoothstep(0.2, 0.32, nC)) * 0.12 + (nA - 0.5) * 0.1);
+        // glitter: view-dependent specks on snow (they twinkle as the camera moves)
+        float gl = texture2D(uNoise, vMbWorld.xz * 3.7 + cameraPosition.xz * 0.06).a * texture2D(uNoise, vMbWorld.zx * 2.9 - cameraPosition.zx * 0.05).r;
+        mbSpark = smoothstep(0.5, 0.62, gl) * vBiome.x * (1.0 - vRock) * 0.9;
+      }
       {
         // rock faces: grey granite in the snow, sandstone strata in the canyons, mossy stone in the hills
         if (vRock > 0.02) {
@@ -71,7 +95,7 @@ export function createTerrainMesh(world, { chunk = 20 } = {}) {
           diffuseColor.rgb = mix(diffuseColor.rgb, rc, smoothstep(0.15, 0.7, vRock));
         }
         // roads from the distance field (normalised: carriageway edge at 4.2)
-        float d = vRoad.x;
+        float ds = vRoad.x, d = abs(ds);
         float type = vRoad.y;
         if (d < 5.6) {
           float aa = fwidth(d) * 1.2 + 0.03;
@@ -84,6 +108,14 @@ export function createTerrainMesh(world, { chunk = 20 } = {}) {
             rc = vec3(0.34, 0.32, 0.33) * (0.9 + 0.16 * grain);
             float edge = smoothstep(3.55 - aa, 3.55, d) * (1.0 - smoothstep(3.8, 3.8 + aa, d));
             rc = mix(rc, vec3(0.93, 0.92, 0.88), edge);
+            // dashed centre line, worn tyre lanes, a few darker repair patches
+            float aw = fwidth(ds) * 1.2 + 0.02;
+            float dash = (1.0 - smoothstep(0.11, 0.11 + aw, abs(ds))) * step(fract(vRoadS / 9.0), 0.42);
+            rc = mix(rc, vec3(0.95, 0.9, 0.72), dash * 0.9);
+            float lane = max(1.0 - smoothstep(0.3, 0.7, abs(d - 1.3)), 1.0 - smoothstep(0.3, 0.7, abs(d - 2.9)));
+            rc *= 1.0 - 0.07 * lane;
+            float patchN = texture2D(uNoise, vMbWorld.xz * 0.07).b;
+            rc *= 1.0 - 0.06 * smoothstep(0.66, 0.7, patchN);
             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.55, 0.52, 0.47), shoulder * 0.7);
           } else if (type < 2.5) {
             // dirt track with two darker ruts per lane
@@ -108,13 +140,13 @@ export function createTerrainMesh(world, { chunk = 20 } = {}) {
   for (let cj = 0; cj < nChunks; cj++) for (let ci = 0; ci < nChunks; ci++) {
     const vi = per + 1, cnt = vi * vi;
     const pos = new Float32Array(cnt * 3), nor = new Float32Array(cnt * 3), col = new Float32Array(cnt * 3);
-    const rk = new Float32Array(cnt), rd = new Float32Array(cnt * 2), bio = new Float32Array(cnt * 3);
+    const rk = new Float32Array(cnt), rd = new Float32Array(cnt * 2), bio = new Float32Array(cnt * 3), rs = new Float32Array(cnt);
     for (let j = 0; j < vi; j++) for (let i = 0; i < vi; i++) {
       const gi = ci * per + i, gj = cj * per + j, k = gj * V + gi, o = j * vi + i;
       pos[o * 3] = -half + gi * cell; pos[o * 3 + 1] = heights[k]; pos[o * 3 + 2] = -half + gj * cell;
       nor.set(normals.subarray(k * 3, k * 3 + 3), o * 3);
       col.set(colors.subarray(k * 3, k * 3 + 3), o * 3);
-      rk[o] = rock[k]; rd[o * 2] = road[k * 2]; rd[o * 2 + 1] = road[k * 2 + 1];
+      rk[o] = rock[k]; rd[o * 2] = road[k * 2]; rd[o * 2 + 1] = road[k * 2 + 1]; rs[o] = roadS[k];
       bio[o * 3] = bsnow[k]; bio[o * 3 + 1] = basph[k]; bio[o * 3 + 2] = bdirt[k];
     }
     const idx = [];
@@ -129,6 +161,7 @@ export function createTerrainMesh(world, { chunk = 20 } = {}) {
     g.setAttribute('aRock', new THREE.BufferAttribute(rk, 1));
     g.setAttribute('aRoad', new THREE.BufferAttribute(rd, 2));
     g.setAttribute('aBiome', new THREE.BufferAttribute(bio, 3));
+    g.setAttribute('aRoadS', new THREE.BufferAttribute(rs, 1));
     g.setIndex(idx);
     g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, mat);

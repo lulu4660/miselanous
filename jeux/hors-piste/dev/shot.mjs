@@ -11,7 +11,7 @@ const W = +(process.argv[4] || 393), H = +(process.argv[5] || 852);
 mkdirSync(out, { recursive: true });
 const mobile = scenario.includes('touch');
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1, hasTouch: mobile, isMobile: mobile });
+const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: +(process.env.DPR || 1), hasTouch: mobile, isMobile: mobile });
 const logs = [];
 page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
@@ -104,6 +104,21 @@ else if (scenario === 'biomes') {
     await page.keyboard.down('ArrowUp'); await wait(2600); await page.keyboard.up('ArrowUp'); await wait(500);
     console.log('biome', t, JSON.stringify(await state()));
     await snap(`biome_${t}`);
+  }
+}
+else if (scenario === 'beauty') {
+  // a car already at speed on each road type, a held arrow, then a frame (for visual review)
+  const spots = await page.evaluate(() => {
+    const w = window.__mb.world, res = {};
+    for (const r of w.roads) for (let i = 0; i < r.pts.length; i += 40) { const p = r.pts[i]; if (!res[p.type]) res[p.type] = { x: p.x + p.tz * 2.2, z: p.z - p.tx * 2.2, h: Math.atan2(p.tx, p.tz), tx: p.tx, tz: p.tz }; }
+    return res;
+  });
+  for (const [t, s] of Object.entries(spots)) {
+    await page.evaluate((s) => { const mb = window.__mb; mb.phys.resetCar(mb.car, s.x, s.z, s.h); mb.car.body.velocity.set(s.tx * 17, 0, s.tz * 17); }, s);
+    await page.keyboard.down('ArrowUp'); await wait(500);
+    await page.keyboard.down('ArrowLeft'); await wait(700); await page.keyboard.up('ArrowLeft');
+    await snap(`beauty_${t}`);
+    await page.keyboard.up('ArrowUp'); await wait(200);
   }
 }
 else if (scenario === 'drift') {
