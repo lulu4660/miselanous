@@ -238,14 +238,14 @@ async function boot() {
     for (const r of world.roads) for (let i = 0; i < r.pts.length; i += 2) { const p = r.pts[i]; const d = (p.x - x) ** 2 + (p.z - z) ** 2; if (d < bd) { bd = d; best = p; } }
     return best;
   }
-  let respawning = false;
+  let respawning = false, notUpright = 0;
   const lastGood = { x: world.spawn.x, z: world.spawn.z, h: world.spawn.heading };
   function respawnOnRoad(msg) {
     if (respawning) return;
     respawning = true;
     $('fade').classList.add('on');
     setTimeout(() => {
-      respawning = false;
+      respawning = false; notUpright = 0;
       try {
         // a NaN'd body has no position left: fall back to the last sane one
         const ok = Number.isFinite(car.pos.x + car.pos.z);
@@ -318,7 +318,7 @@ async function boot() {
     if (view === 'bonnet') {
       cam.yaw = carYaw;
       const bx = car.spec.box, camY = bx.minY + (bx.maxY - bx.minY) * 0.5;
-      localP.x = 0; localP.y = camY; localP.z = bx.maxZ - 0.3; // bumper cam, just inside the nose (single-sided shell is invisible from within)
+      localP.x = 0; localP.y = camY; localP.z = bx.maxZ + 0.35; // bumper cam, just ahead of the nose (bull bars, plates and light pods stay out of view)
       car.body.pointToWorldFrame(localP, worldP);
       camera.position.set(worldP.x, worldP.y, worldP.z);
       localP.y = camY - 0.25; localP.z = V.look;
@@ -421,7 +421,7 @@ async function boot() {
     let a = m.dirt || 0;
     if (kind && c.groundedCount > 0) {
       if (kind !== m.dirtKind) { a *= Math.max(0, 1 - dt * 0.6); if (a < 0.08) m.dirtKind = kind; } // the old layer washes off first
-      else a = Math.min(0.85, a + dt * 0.045 * (0.3 + sp + c.skid));
+      else a = Math.min(0.6, a + dt * 0.03 * (0.3 + sp + c.skid)); // (capped: the paint stays readable)
     } else a = Math.max(0, a - dt * 0.006);
     dirtCol.copy(DIRT_COL[m.dirtKind]);
     if (Math.abs(a - (m.dirt || 0)) > 0.002 || !m.dirtSet) { m.setDirt(a, dirtCol); m.dirtSet = true; }
@@ -523,7 +523,10 @@ async function boot() {
     if (game.mode === 'play') {
       wheelEffects(dt, car, true);
       if (car.groundedCount >= 2 && Number.isFinite(car.pos.x + car.pos.z)) { lastGood.x = car.pos.x; lastGood.z = car.pos.z; lastGood.h = car.headingYaw(); }
-      if (car.pos.y < world.heightAt(car.pos.x, car.pos.z) - 5 || (car.flippedTime > 6) || Math.abs(car.pos.x) > world.half - 4 || Math.abs(car.pos.z) > world.half - 4) respawnOnRoad('Retour sur la route');
+      // stuck on the side or roof: the self-righting push can make flippedTime saw-tooth, so
+      // also count time spent not upright (slow decay)
+      notUpright = car.R[4] < 0.5 ? notUpright + dt : Math.max(0, notUpright - dt * 0.5);
+      if (car.pos.y < world.heightAt(car.pos.x, car.pos.z) - 5 || car.flippedTime > 6 || notUpright > 7 || Math.abs(car.pos.x) > world.half - 4 || Math.abs(car.pos.z) > world.half - 4) respawnOnRoad('Retour sur la route');
     }
 
     U.uTime.value = phys.time % 2000;

@@ -390,7 +390,7 @@ export function createVehicle(world, map, spec, material) {
       // (a tyre past its peak counts as fully used, or sliding would hand it more drive)
       const u = a >= ap ? 1 : g;
       const share = Math.sqrt(Math.max(TY.tcFloor ?? 0.12, 1 - u * u));
-      const fxCap = cap * (tyreBrake[i] ? Math.max(share, 0.45) : share);
+      const fxCap = cap * (tyreBrake[i] ? Math.max(share, 0.55) : share);
       let fx = tyreFx[i], spin = 0;
       if (Math.abs(fx) > fxCap) { if (!tyreBrake[i]) spin = Math.min(1, (Math.abs(fx) - fxCap) / (fxCap + 1)); fx = Math.sign(fx) * fxCap * (tyreBrake[i] ? 1 : 0.92); }
       if (cw.front) gF += g * 0.5;

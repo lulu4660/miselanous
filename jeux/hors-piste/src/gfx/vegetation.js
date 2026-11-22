@@ -256,7 +256,8 @@ export function createVegetation(world, quality) {
       flowers.push({ x, z, y: world.heightAt(x, z) - 0.02, s: 0.8 + rnd() * 0.5, rot: rnd() * 6.28, hue });
     }
   }
-  add(flowerGeo, grassMat, flowers, { chunk: 50, color: (it) => it.hue });
+  const flowerGroup = add(flowerGeo, grassMat, flowers, { chunk: 50, color: (it) => it.hue });
+  flowerGroup.traverse((o) => { if (o.isInstancedMesh) o.userData.near = true; }); // small things: short draw distance
 
   // --- roadside markers: reflector posts on asphalt, striped snow poles, wooden fence posts on dirt
   const postMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true }), { cutout: 1 });
@@ -308,7 +309,7 @@ export function createVegetation(world, quality) {
         const bs = m.boundingSphere;
         if (!bs) { m.computeBoundingSphere(); continue; }
         const d = Math.hypot(bs.center.x - camPos.x, bs.center.z - camPos.z) - bs.radius;
-        m.visible = d < far * (m.geometry.attributes.position.count < 200 ? 0.45 : 1);
+        m.visible = d < far * (m.userData.near ? 0.3 : m.geometry.attributes.position.count < 200 ? 0.45 : 1);
       }
     },
   };
