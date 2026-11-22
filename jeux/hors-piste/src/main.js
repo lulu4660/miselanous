@@ -144,10 +144,10 @@ async function boot() {
   // ---------- audio, input, UI
   const audio = createAudio();
   if (store.get('hp-muted') === '1') audio.setMuted(true);
-  const input = createInput({ wheel: $('wheel'), wheelKnob: $('wheelKnob'), pedals: $('pedals'), gas: $('gasP'), brake: $('brakeP'), horn: $('horn') });
+  const input = createInput({ wheel: $('wheel'), wheelKnob: $('wheelKnob'), pedals: $('pedals'), gas: $('gasP'), brake: $('brakeP'), hbrake: $('hbP'), horn: $('horn') });
   const touchUI = !matchMedia('(hover: hover) and (pointer: fine)').matches;
   $('how').innerHTML = touchUI
-    ? '<b>À gauche</b> : glisse ou touche les flèches pour tourner. <b>À droite</b> : Avancer, et Frein pour freiner puis reculer.'
+    ? '<b>À gauche</b> : glisse ou touche les flèches pour tourner. <b>À droite</b> : Avancer, Frein pour freiner puis reculer, Frein à main pour pivoter dans les épingles.'
     : '<b>Flèches</b> ou <b>ZQSD / WASD</b> · <b>Espace</b> frein à main · <b>K</b> klaxon · <b>C</b> vue';
   const minimap = createMinimap($('minimap'), world);
   const toast = (() => { let t = 0; return (big, small = '', ms = 2200) => { $('toastBig').textContent = big; $('toastSmall').textContent = small; $('toast').classList.add('on'); clearTimeout(t); t = setTimeout(() => $('toast').classList.remove('on'), ms); }; })();
@@ -216,7 +216,8 @@ async function boot() {
   $('mReset').addEventListener('click', () => { $('menu').hidden = true; respawnOnRoad('Retour sur la route'); });
   $('mFx').addEventListener('click', () => { if (!post || post.broken) return; fxLevel = fxLevel > 0 ? 0 : quality.fx; post.setLevel(fxLevel); store.set('hp-fx', fxLevel ? '1' : '0'); setMenuStates(); });
   $('mSound').addEventListener('click', () => { audio.unlock(); audio.setMuted(!audio.isMuted()); store.set('hp-muted', audio.isMuted() ? '1' : '0'); setMenuStates(); });
-  const togglePerf = () => { $('perf').hidden = !$('perf').hidden; setMenuStates(); };
+  $('perf').hidden = store.get('hp-perf') === '0';
+  const togglePerf = () => { $('perf').hidden = !$('perf').hidden; store.set('hp-perf', $('perf').hidden ? '0' : '1'); setMenuStates(); };
   $('mPerf').addEventListener('click', togglePerf);
   $('speed').addEventListener('click', togglePerf);
   document.addEventListener('pointerdown', (e) => { if (!$('menu').hidden && !e.target.closest('#menu') && !e.target.closest('#btnMenu')) { $('menu').hidden = true; $('btnMenu').setAttribute('aria-expanded', 'false'); } });
@@ -455,7 +456,7 @@ async function boot() {
   window.__mbBooted = true;
 
   // ---------- loop
-  let last = performance.now(), hudT = 0, perfAcc = 0, perfN = 0, perfT = 0, fpsShown = 60;
+  let last = performance.now(), hudT = 0, perfAcc = 0, perfN = 0, perfT = 0, fpsShown = 60, fpsAcc = 0, fpsN = 0;
   window.__mb = { phys, world, game, camera, renderer, scene, quality, traffic, post, get car() { return car; }, start, setFx: (n) => { fxLevel = n; post?.setLevel(n); }, setView: (v) => { view = v; cam.snap = true; }, swapCar };
 
   function frame(now) {
@@ -528,6 +529,8 @@ async function boot() {
     } else renderer.render(scene, camera);
 
     perfAcc += dt; perfN++; perfT += dt; upCooldown -= dt;
+    fpsAcc += dt; fpsN++;
+    if (fpsAcc > 0.5) { if (!$('perf').hidden) $('perf').innerHTML = `<b>${Math.round(fpsN / fpsAcc)}</b> i/s`; fpsAcc = 0; fpsN = 0; }
     if (perfT > 2) {
       const avg = perfAcc / perfN;
       perfAcc = 0; perfN = 0; perfT = 0; fpsShown = 1 / avg;
@@ -540,7 +543,6 @@ async function boot() {
         } else if (avg < 0.0178 && upCooldown <= 0 && renderScale < maxScale - 0.001) { renderScale = Math.min(maxScale, renderScale + 0.05); upCooldown = 4; applySize(); }
       }
       const txt = `${Math.round(fpsShown)} i/s · ${renderer.getPixelRatio().toFixed(2)}x · fx ${post ? (post.broken ? 'off' : post.level) : '-'} · ${tierName}`;
-      if (!$('perf').hidden) $('perf').textContent = txt;
       $('garagePerf').textContent = txt;
     }
   }

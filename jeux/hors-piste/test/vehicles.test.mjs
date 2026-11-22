@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createPhysics, STEP } from '../src/physics.js';
-import { VEHICLES, VEHICLE_ORDER, S } from '../src/vehicles.js';
+import { VEHICLES, VEHICLE_ORDER, S, SURF_GRIP } from '../src/vehicles.js';
 import { flatMap } from './flatmap.mjs';
 
 const run = (phys, seconds, fn) => { for (let k = 0; k < seconds / STEP; k++) { fn && fn(); phys.update(STEP); } };
@@ -76,21 +76,27 @@ for (const id of VEHICLE_ORDER) {
     assert.ok(car.forwardSpeed > 6, `speed after 2 s: ${car.forwardSpeed.toFixed(2)}`);
   });
 
-  test(`${spec.name}: Avancer + full lock turns tight on dirt and snow, without spinning`, () => {
-    for (const [surf, maxR] of [[S.DIRT, 48], [S.SNOWROAD, 62]]) { // old model: 77-184 m and 117-193 m
+  test(`${spec.name}: Avancer + full lock corners at the tyres' grip, without spinning`, () => {
+    // realistic model: the held arrow must use the grip there is (radius close to v²/(μg)),
+    // neither plough wide (the old "doesn't turn") nor rotate the car by itself
+    for (const surf of [S.ASPHALT, S.DIRT, S.SNOWROAD]) {
       const phys = createPhysics(flatMap({ surf, size: 1400, n: 140 }));
       const car = phys.addVehicle(spec, { player: true });
       car.assist = 1;
       car.reset(-550, -550, Math.PI / 4);
-      run(phys, 8, () => { car.input.throttle = 1; car.input.steer = 0; if (car.forwardSpeed > 22) car.input.throttle = 0; });
-      let maxBeta = 0, r = 0, v = 0, n = 0;
+      run(phys, 10, () => { car.input.throttle = car.forwardSpeed < 20 ? 1 : 0.4; car.input.steer = 0; });
+      // path curvature from the turn of the velocity (the body may still be swinging)
+      let maxBeta = 0, v = 0, n = 0, turned = 0, prev = null;
       for (let k = 0; k < 3 / STEP; k++) {
-        car.input.throttle = 1; car.input.steer = 1; phys.update(STEP);
+        car.input.throttle = car.forwardSpeed < 18 ? 1 : 0.4; car.input.steer = 1; phys.update(STEP);
         maxBeta = Math.max(maxBeta, Math.abs(car.beta));
-        if (k * STEP > 2) { r += Math.abs(car.angVel.y); v += Math.hypot(car.vel.x, car.vel.z); n++; }
+        const h = Math.atan2(car.vel.x, car.vel.z);
+        if (k * STEP > 1.5) { if (prev !== null) turned += Math.abs(Math.atan2(Math.sin(h - prev), Math.cos(h - prev))); v += Math.hypot(car.vel.x, car.vel.z); n++; }
+        prev = h;
       }
-      const R = v / r;
-      assert.ok(R < maxR && maxBeta < 0.8 && car.R[4] > 0.8, `surface ${surf}: R ${R.toFixed(0)} m, max slip ${(maxBeta * 57.3).toFixed(0)}°`);
+      const vm = v / n, R = (vm * n * STEP) / Math.max(1e-6, turned), mu = SURF_GRIP[surf] * spec.grip[surf];
+      const latG = (vm * vm) / R / 9.81;
+      assert.ok(latG > 0.75 * mu && maxBeta < 0.8 && car.R[4] > 0.8, `surface ${surf}: R ${R.toFixed(0)} m at ${vm.toFixed(1)} m/s = ${latG.toFixed(2)} g for mu ${mu.toFixed(2)}, max slip ${(maxBeta * 57.3).toFixed(0)}°`);
     }
   });
 

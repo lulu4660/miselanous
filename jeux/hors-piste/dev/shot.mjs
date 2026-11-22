@@ -62,6 +62,14 @@ else if (scenario === 'drive' || scenario === 'touch') {
     await T('touchEnd', []);
     await wait(500);
     console.log('released ->', JSON.stringify(await state()));
+    // handbrake pedal: rear locks (touch the button above the brake)
+    const hb = await page.locator('#hbP').boundingBox();
+    await T('touchStart', [{ x: gx, y: gy, id: 1 }]); await wait(1800);
+    await T('touchStart', [{ x: hb.x + hb.width / 2, y: hb.y + hb.height / 2, id: 4 }, { x: wbb.x + 14, y: wbb.y + wbb.height / 2, id: 2 }]);
+    await wait(400);
+    console.log('handbrake + left ->', JSON.stringify(await page.evaluate(() => { const c = window.__mb.car; return { hb: c.input.handbrake, steer: c.input.steer, thr: c.input.throttle, beta: Math.round(c.beta * 57.3), v: +c.forwardSpeed.toFixed(1) }; })));
+    await snap('touch_handbrake');
+    await T('touchEnd', []); await wait(300);
     await T('touchStart', [{ x: gx, y: gy, id: 1 }]);
     await wait(1500);
     await T('touchStart', [{ x: gx, y: gy, id: 1 }, { x: wbb.x + wbb.width - 14, y: wbb.y + wbb.height / 2, id: 2 }]);

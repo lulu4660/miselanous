@@ -5,8 +5,8 @@
 // Surface ids (see world.js): grip multipliers per vehicle are indexed by these.
 export const S = { ASPHALT: 0, DIRT: 1, SNOWROAD: 2, GRASS: 3, SAND: 4, SNOW: 5, ROCK: 6, ICE: 7 };
 export const SURF_NAMES = ['asphalt', 'dirt', 'snowroad', 'grass', 'sand', 'snow', 'rock', 'ice'];
-// base tyre friction (RaycastVehicle frictionSlip) and rolling resistance per surface
-export const SURF_GRIP = [1.55, 1.05, 0.62, 0.95, 0.85, 0.5, 1.25, 0.22];
+// tyre friction coefficient per surface (rally tyres; studs on the snow) and rolling resistance
+export const SURF_GRIP = [1.15, 0.85, 0.62, 0.66, 0.6, 0.46, 0.95, 0.24];
 export const SURF_ROLL = [0.012, 0.03, 0.035, 0.04, 0.06, 0.08, 0.02, 0.01];
 
 const wheels4 = (track, front, rear, y, r, rRear = r) => [
@@ -23,8 +23,9 @@ export const VEHICLES = {
     box: { minX: -0.9, maxX: 0.9, minY: -0.34, maxY: 0.98, minZ: -1.98, maxZ: 2.02 },
     chassis: [{ half: [0.9, 0.36, 2.0], offset: [0, 0.0, 0.02] }, { half: [0.78, 0.3, 1.1], offset: [0, 0.66, -0.3] }],
     wheels: wheels4(0.8, 1.27, -1.22, -0.06, 0.34),
-    restLength: 0.34, stiffness: 24, dampingCompression: 2.6, dampingRelaxation: 2.3, rollInfluence: 0.06, maxTravel: 0.3,
-    engineForce: 9800, topSpeed: 44, downforce: 1.2, reverseSpeed: 9, brakeDecel: 12, aiGrip: 0.9,
+    restLength: 0.34, stiffness: 24, dampingCompression: 2.6, dampingRelaxation: 2.3, rollInfluence: 0.4, maxTravel: 0.3, arb: 0.9,
+    // engineForce: wheel force at peak torque in 1st gear; gears: top speed of each gear (share of topSpeed)
+    engineForce: 9800, topSpeed: 44, gears: [0.3, 0.44, 0.58, 0.72, 0.86, 1], engineBrake: 0.16, downforce: 1.2, reverseSpeed: 9, brakeDecel: 12, aiGrip: 0.95,
     steer: { max: 0.55, rate: 5 },
     grip: [1.0, 1.08, 1.12, 1.0, 1.05, 1.08, 1.0, 1.05],
     inertiaMul: [1.2, 1.0, 1.3],
@@ -38,8 +39,8 @@ export const VEHICLES = {
     box: { minX: -0.97, maxX: 0.97, minY: -0.24, maxY: 0.84, minZ: -2.22, maxZ: 2.28 },
     chassis: [{ half: [0.97, 0.3, 2.24], offset: [0, 0.04, 0.03] }, { half: [0.78, 0.24, 1.0], offset: [0, 0.58, -0.35] }],
     wheels: wheels4(0.86, 1.45, -1.34, -0.04, 0.36),
-    restLength: 0.24, stiffness: 38, dampingCompression: 3.4, dampingRelaxation: 3.0, rollInfluence: 0.04, maxTravel: 0.2,
-    engineForce: 12500, topSpeed: 56, downforce: 3.2, reverseSpeed: 9, brakeDecel: 13,
+    restLength: 0.24, stiffness: 38, dampingCompression: 3.4, dampingRelaxation: 3.0, rollInfluence: 0.35, maxTravel: 0.2, arb: 1.1,
+    engineForce: 12500, topSpeed: 56, gears: [0.27, 0.41, 0.55, 0.7, 0.85, 1], engineBrake: 0.14, downforce: 3.2, reverseSpeed: 9, brakeDecel: 13,
     steer: { max: 0.52, rate: 5 },
     grip: [1.12, 0.92, 0.85, 0.9, 0.85, 0.8, 1.05, 0.9],
     inertiaMul: [1.1, 1.0, 1.5],
@@ -53,8 +54,8 @@ export const VEHICLES = {
     box: { minX: -0.98, maxX: 0.98, minY: -0.42, maxY: 1.22, minZ: -2.12, maxZ: 2.2 },
     chassis: [{ half: [0.96, 0.4, 2.14], offset: [0, -0.02, 0.02] }, { half: [0.72, 0.38, 1.42], offset: [0, 0.8, -0.45] }],
     wheels: wheels4(0.92, 1.33, -1.24, -0.05, 0.46),
-    restLength: 0.5, stiffness: 15.5, dampingCompression: 2.4, dampingRelaxation: 2.0, rollInfluence: 0.08, maxTravel: 0.44,
-    engineForce: 12600, topSpeed: 33, reverseSpeed: 8, brakeDecel: 10, aiGrip: 0.78,
+    restLength: 0.5, stiffness: 15.5, dampingCompression: 2.4, dampingRelaxation: 2.0, rollInfluence: 0.3, maxTravel: 0.44, arb: 0.7,
+    engineForce: 12600, topSpeed: 33, gears: [0.33, 0.5, 0.67, 0.84, 1], engineBrake: 0.2, reverseSpeed: 8, brakeDecel: 10, aiGrip: 0.85,
     steer: { max: 0.6, rate: 4.2 },
     grip: [0.95, 1.08, 1.22, 1.08, 1.15, 1.3, 1.05, 1.1],
     inertiaMul: [1.25, 1.0, 1.6],
@@ -68,8 +69,8 @@ export const VEHICLES = {
     box: { minX: -0.72, maxX: 0.72, minY: -0.3, maxY: 1.12, minZ: -1.75, maxZ: 1.85 },
     chassis: [{ half: [0.7, 0.3, 1.78], offset: [0, 0.0, 0.05] }, { half: [0.62, 0.38, 0.75], offset: [0, 0.72, -0.25] }],
     wheels: wheels4(0.88, 1.25, -1.15, -0.06, 0.4, 0.44),
-    restLength: 0.44, stiffness: 20, dampingCompression: 2.2, dampingRelaxation: 1.9, rollInfluence: 0.07, maxTravel: 0.4,
-    engineForce: 7600, topSpeed: 42, reverseSpeed: 9, brakeDecel: 12,
+    restLength: 0.44, stiffness: 20, dampingCompression: 2.2, dampingRelaxation: 1.9, rollInfluence: 0.32, maxTravel: 0.4, arb: 0.8,
+    engineForce: 7600, topSpeed: 42, gears: [0.32, 0.49, 0.66, 0.83, 1], engineBrake: 0.15, reverseSpeed: 9, brakeDecel: 12,
     steer: { max: 0.6, rate: 5.5 },
     grip: [0.95, 1.12, 1.0, 1.08, 1.15, 1.0, 1.0, 0.95],
     inertiaMul: [1.2, 1.0, 1.3],

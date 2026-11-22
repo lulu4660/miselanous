@@ -53,7 +53,9 @@ button:focus-visible { outline: 2px solid var(--yellow); outline-offset: 3px; }
 #gear { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--yellow); color: var(--ink); font-family: var(--font-display); font-weight: 900; font-size: 19px; }
 #speed .v { font-family: var(--font-display); font-weight: 800; font-size: 28px; font-variant-numeric: tabular-nums; min-width: 2.2ch; text-align: right; line-height: 1; }
 #speed .u { font-size: 12px; font-weight: 700; color: var(--cream-dim); }
-#perf { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 106px); right: calc(env(safe-area-inset-right, 0px) + 14px); font-size: 11px; font-weight: 700; color: var(--cream); text-shadow: 0 1px 3px rgba(20,14,26,.8); font-variant-numeric: tabular-nums; }
+#perf { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 106px); right: calc(env(safe-area-inset-right, 0px) + 14px); padding: 4px 10px; border-radius: 999px; background: rgba(30, 22, 38, .62); font-size: 11px; font-weight: 700; color: var(--cream); font-variant-numeric: tabular-nums; }
+#perf b { font-size: 13px; }
+#hud:not(.on) #perf { display: none; }
 #surf { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 124px); left: calc(env(safe-area-inset-left, 0px) + 66px); transform: translateX(-50%); width: max-content; padding: 4px 10px; border-radius: 999px; background: rgba(30, 22, 38, .62); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--cream); white-space: nowrap; }
 #toast { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 16%); transform: translate(-50%, 8px); text-align: center; opacity: 0; transition: opacity .3s ease, transform .3s ease; width: min(88vw, 520px); }
 #toast.on { opacity: 1; transform: translate(-50%, 0); }
@@ -81,6 +83,11 @@ button:focus-visible { outline: 2px solid var(--yellow); outline-offset: 3px; }
 .pedal svg { width: 30px; height: 30px; }
 .pedal small { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; line-height: 1.15; text-align: center; padding: 0 8px; }
 #brakeP { width: 76px; height: 92px; }
+.pcol { display: flex; flex-direction: column; gap: 10px; }
+#hbP { width: 76px; height: 56px; grid-auto-flow: column; gap: 2px; }
+#hbP svg { width: 22px; height: 22px; }
+#hbP small { font-size: 10px; padding: 0 4px 0 0; text-align: left; }
+#hbP.down { background: rgba(255, 201, 74, .5); }
 #gasP { width: 84px; height: 124px; background: rgba(255, 123, 92, .58); border-color: rgba(255, 220, 200, .5); }
 .pedal.down { transform: scale(.94) translateY(2px); background: var(--glass-strong); }
 #gasP.down { background: rgba(255, 123, 92, .88); }
@@ -130,7 +137,7 @@ body:not(.playing) #wheel, body:not(.playing) #pedals, body:not(.playing) #horn,
 @media (max-width: 389px) {
   #wheel { left: calc(env(safe-area-inset-left, 0px) + 22px); width: calc(100vw - 196px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)); padding: 0 10px; }
   #pedals { gap: 8px; right: calc(env(safe-area-inset-right, 0px) + 12px); }
-  #brakeP { width: 64px; } #gasP { width: 72px; }
+  #brakeP, #hbP { width: 64px; } #gasP { width: 72px; } #hbP svg { display: none; } #hbP small { text-align: center; padding: 0 2px; }
   .pedal small { padding: 0 4px; letter-spacing: .02em; }
   #horn { right: calc(env(safe-area-inset-right, 0px) + 16px); }
   #mapWrap { width: 92px; height: 92px; } #surf { left: calc(env(safe-area-inset-left, 0px) + 58px); top: calc(env(safe-area-inset-top, 0px) + 108px); }
@@ -142,7 +149,7 @@ body:not(.playing) #wheel, body:not(.playing) #pedals, body:not(.playing) #horn,
   #garage .logo { font-size: 64px; }
   .card { width: min(380px, 52vw); padding: 12px; gap: 8px; }
   .card .name h2 { font-size: 26px; }
-  #wheel { height: 66px; } #brakeP { height: 78px; } #gasP { height: 100px; } #horn { bottom: calc(env(safe-area-inset-bottom, 0px) + 136px); }
+  #wheel { height: 66px; } #brakeP { height: 70px; } #hbP { height: 44px; } #gasP { height: 100px; } #horn { bottom: calc(env(safe-area-inset-bottom, 0px) + 136px); }
   #mapWrap { width: 88px; height: 88px; } #surf { left: calc(env(safe-area-inset-left, 0px) + 56px); top: calc(env(safe-area-inset-top, 0px) + 102px); }
 }
 @media (prefers-reduced-motion: reduce) { #garage, #toast, #hud, #fade { transition: none; } }
@@ -163,7 +170,7 @@ body:not(.playing) #wheel, body:not(.playing) #pedals, body:not(.playing) #horn,
     </button>
   </div>
   <div id="speed" class="pill" title="Touchez pour afficher les performances"><span id="gear">1</span><span class="v" id="kmh">0</span><span class="u">km/h</span></div>
-  <div id="perf" hidden></div>
+  <div id="perf"></div>
   <div id="toast"><div class="big" id="toastBig"></div><div class="small" id="toastSmall"></div></div>
 </div>
 
@@ -172,7 +179,7 @@ body:not(.playing) #wheel, body:not(.playing) #pedals, body:not(.playing) #horn,
   <button id="mReset" type="button" role="menuitem">Revenir sur la route <span class="state">↺</span></button>
   <button id="mFx" type="button" role="menuitem">Effets visuels <span class="state" id="mFxState">Oui</span></button>
   <button id="mSound" type="button" role="menuitem">Son <span class="state" id="mSoundState">Oui</span></button>
-  <button id="mPerf" type="button" role="menuitem">Performances <span class="state" id="mPerfState">Non</span></button>
+  <button id="mPerf" type="button" role="menuitem">Compteur d'images <span class="state" id="mPerfState">Oui</span></button>
 </div>
 
 <div id="wheel" class="ctl" role="slider" aria-label="Volant : glisse ou touche les flèches" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0">
@@ -181,9 +188,15 @@ body:not(.playing) #wheel, body:not(.playing) #pedals, body:not(.playing) #horn,
   <svg class="arr r" viewBox="0 0 30 30" aria-hidden="true"><path d="m11 7 9 8-9 8" fill="none" stroke="#fff4e2" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
 </div>
 <div id="pedals" class="ctl">
-  <div id="brakeP" class="pedal" role="button" aria-label="Frein, puis marche arrière">
-    <svg viewBox="0 0 30 30" aria-hidden="true"><rect x="8" y="8" width="14" height="14" rx="3" fill="#fff4e2"/></svg>
-    <small>Frein<br>Recul</small>
+  <div class="pcol">
+    <div id="hbP" class="pedal" role="button" aria-label="Frein à main">
+      <svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 4v13" stroke="#fff4e2" stroke-width="3.2" stroke-linecap="round"/><circle cx="15" cy="21" r="5" fill="none" stroke="#fff4e2" stroke-width="3"/></svg>
+      <small>Frein à main</small>
+    </div>
+    <div id="brakeP" class="pedal" role="button" aria-label="Frein, puis marche arrière">
+      <svg viewBox="0 0 30 30" aria-hidden="true"><rect x="8" y="8" width="14" height="14" rx="3" fill="#fff4e2"/></svg>
+      <small>Frein<br>Recul</small>
+    </div>
   </div>
   <div id="gasP" class="pedal" role="button" aria-label="Accélérer">
     <svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 6 24 17h-5.5v7h-7v-7H6Z" fill="#fff4e2"/></svg>

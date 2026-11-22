@@ -10,7 +10,7 @@ const ids = !process.argv[2] || process.argv[2] === 'all' ? VEHICLE_ORDER : proc
 const metres = +(process.argv[3] || 1600);
 const road = world.roads[+(process.argv[4] || 0)];
 const P = road.pts, n = P.length;
-const MU = [0, 1.55, 1.2, 0.85], DEC = [0, 9, 6.5, 4.5];
+const MU = [0, 1.05, 0.82, 0.66], DEC = [0, 9.5, 7.5, 5.5]; // measured on the handling bench (dev/handling.mjs) for the realistic model
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 for (const id of ids) {
   const phys = createPhysics(world);

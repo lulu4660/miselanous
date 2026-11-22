@@ -1,12 +1,13 @@
 // Touch: a steering bar on the left (tap ◀ / ▶ for full lock, slide for analog) and two
-// pedals on the right (gas, brake → reverse once stopped). Nothing moves without a finger.
+// pedals on the right (gas, brake → reverse once stopped, handbrake above the brake).
+// Nothing moves without a finger.
 // The pedals are one hit zone so a thumb can roll from gas to brake without lifting.
 // Keyboard too.
 
-export function createInput({ wheel, wheelKnob, pedals, gas, brake, horn }) {
+export function createInput({ wheel, wheelKnob, pedals, gas, brake, hbrake, horn }) {
   const state = {
     steer: { id: null, x: 0 },
-    pedalPointers: new Map(), // pointerId -> 'gas' | 'brake' | null
+    pedalPointers: new Map(), // pointerId -> 'gas' | 'brake' | 'hb' | null
     keys: new Set(),
     horn: false,
     onFirstUse: null,
@@ -59,7 +60,8 @@ export function createInput({ wheel, wheelKnob, pedals, gas, brake, horn }) {
   // ---- pedals (single hit zone)
   const pedalAt = (x, y) => {
     let best = null, bd = Infinity;
-    for (const [name, el] of [['gas', gas], ['brake', brake]]) {
+    for (const [name, el] of [['gas', gas], ['brake', brake], ['hb', hbrake]]) {
+      if (!el) continue;
       const r = el.getBoundingClientRect();
       const dx = Math.max(r.left - x, 0, x - r.right), dy = Math.max(r.top - y, 0, y - r.bottom);
       const d = Math.hypot(dx, dy);
@@ -68,10 +70,11 @@ export function createInput({ wheel, wheelKnob, pedals, gas, brake, horn }) {
     return bd < 40 ? best : null;
   };
   const refreshPedals = () => {
-    let g = false, b = false;
-    for (const v of state.pedalPointers.values()) { if (v === 'gas') g = true; if (v === 'brake') b = true; }
+    let g = false, b = false, h = false;
+    for (const v of state.pedalPointers.values()) { if (v === 'gas') g = true; if (v === 'brake') b = true; if (v === 'hb') h = true; }
     gas.classList.toggle('down', g && !b);
     brake.classList.toggle('down', b);
+    hbrake?.classList.toggle('down', h);
   };
   pedals.addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -131,17 +134,18 @@ export function createInput({ wheel, wheelKnob, pedals, gas, brake, horn }) {
   window.addEventListener('blur', reset);
   document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); });
 
-  // steer: -1 right .. +1 left (car frame); throttle: 1 gas, -1 brake/reverse; brake: engine braking when coasting
+  // steer: -1 right .. +1 left (car frame); throttle: 1 gas, -1 brake/reverse; handbrake: locks the rear
   state.read = function () {
     const K = state.keys;
     const kx = (K.has('right') ? 1 : 0) - (K.has('left') ? 1 : 0);
     const ky = (K.has('up') ? 1 : 0) - (K.has('down') ? 1 : 0);
-    let g = false, b = false;
-    for (const v of state.pedalPointers.values()) { if (v === 'gas') g = true; if (v === 'brake') b = true; }
+    let g = false, b = false, h = false;
+    for (const v of state.pedalPointers.values()) { if (v === 'gas') g = true; if (v === 'brake') b = true; if (v === 'hb') h = true; }
     const sx = state.steer.id !== null ? Math.sign(state.steer.x) * Math.pow(Math.min(1, Math.abs(state.steer.x)), 1.2) : 0;
     const steer = kx !== 0 ? -kx : -sx;
     const throttle = b || ky < 0 ? -1 : g || ky > 0 ? 1 : 0;
-    return { steer, throttle, brake: throttle === 0 ? 0.12 : 0, handbrake: K.has('hb'), horn: state.horn || K.has('horn') };
+    // lifting off = engine braking (vehicle.js), so no coasting brake here
+    return { steer, throttle, brake: 0, handbrake: h || K.has('hb'), horn: state.horn || K.has('horn') };
   };
   state.reset = reset;
   return state;
