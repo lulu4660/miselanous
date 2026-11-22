@@ -133,6 +133,9 @@ function digit(P, ch, plane, sgn, x, y, z, h, color) {
 }
 // round race roundel + number on both doors
 function roundel(P, ch, x, y, z, r, ring, face, ink) {
+  // the number must read on any livery: a dark face gets a cream digit, a light one a dark digit
+  const lum = (h) => { const c = new THREE.Color(h); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; };
+  if (Math.abs(lum(face) - lum(ink)) < 0.3) ink = lum(face) < 0.4 ? '#f0dcc4' : '#2a2630';
   for (const s of mirrorXs) {
     P.cyl(r, r, 0.016, 12, 'x', ring, { x: s * x, y, z });
     P.cyl(r * 0.8, r * 0.8, 0.016, 12, 'x', face, { x: s * (x + 0.008), y, z });
