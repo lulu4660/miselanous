@@ -118,6 +118,9 @@ else if (scenario === 'beauty') {
     await page.keyboard.down('ArrowUp'); await wait(500);
     await page.keyboard.down('ArrowLeft'); await wait(700); await page.keyboard.up('ArrowLeft');
     await snap(`beauty_${t}`);
+    // whole-frame cost (shadow pass + scene + post passes)
+    const info = await page.evaluate(() => new Promise((res) => { const r = window.__mb.renderer; r.info.autoReset = false; r.info.reset(); requestAnimationFrame(() => { const o = { calls: r.info.render.calls, tris: r.info.render.triangles }; r.info.autoReset = true; res(o); }); }));
+    console.log('beauty', t, JSON.stringify(info));
     await page.keyboard.up('ArrowUp'); await wait(200);
   }
 }

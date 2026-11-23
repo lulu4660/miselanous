@@ -69,6 +69,19 @@ button:focus-visible { outline: 2px solid var(--yellow); outline-offset: 3px; }
 #menu button:active { background: rgba(255,244,226,.18); }
 #menu .state { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--yellow); }
 
+/* credits (licensed models, CC BY) */
+#credits { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px calc(env(safe-area-inset-bottom, 0px) + 16px); background: rgba(20,14,26,.55); pointer-events: auto; }
+#credits[hidden] { display: none; }
+#credits .card { width: min(560px, 100%); max-height: 100%; display: flex; flex-direction: column; overflow: hidden; padding: 18px 18px 14px; border-radius: 22px; background: var(--glass-strong); border: 1px solid var(--line); box-shadow: 0 12px 36px rgba(20,14,26,.5); user-select: text; -webkit-user-select: text; }
+#credits h2 { flex: none; margin: 0 0 6px; font-family: var(--font-display); font-weight: 900; text-transform: uppercase; font-size: 30px; line-height: 1; }
+#credits p { flex: none; margin: 0 0 10px; font-size: 13px; line-height: 1.45; color: var(--cream-dim); }
+#credits ul { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+#credits li { padding: 10px 12px; border-radius: 14px; background: rgba(255,244,226,.07); font-size: 13px; line-height: 1.4; }
+#credits li b { display: block; font-size: 14px; }
+#credits li .use { color: var(--yellow); font-weight: 800; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; }
+#credits a { color: var(--cream); text-underline-offset: 2px; }
+#credits button { flex: none; width: 100%; border: 0; border-radius: 14px; padding: 13px; background: var(--cream); color: var(--ink); font-weight: 800; font-size: 15px; cursor: pointer; }
+
 /* driving controls */
 .ctl { position: fixed; z-index: 22; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 #wheel { left: calc(env(safe-area-inset-left, 0px) + 26px); bottom: calc(env(safe-area-inset-bottom, 0px) + 26px); width: min(200px, calc(100vw - 236px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))); height: 78px; border-radius: 999px;
@@ -180,6 +193,16 @@ body:not(.playing) #wheel, body:not(.playing) #pedals, body:not(.playing) #horn,
   <button id="mFx" type="button" role="menuitem">Effets visuels <span class="state" id="mFxState">Oui</span></button>
   <button id="mSound" type="button" role="menuitem">Son <span class="state" id="mSoundState">Oui</span></button>
   <button id="mPerf" type="button" role="menuitem">Compteur d'images <span class="state" id="mPerfState">Oui</span></button>
+  <button id="mCredits" type="button" role="menuitem">Crédits <span class="state">CC BY</span></button>
+</div>
+
+<div id="credits" hidden role="dialog" aria-modal="true" aria-labelledby="creditsT">
+  <div class="card">
+    <h2 id="creditsT">Crédits</h2>
+    <p>Modèles 3D sous licence <a href="https://creativecommons.org/licenses/by/4.0/deed.fr" target="_blank" rel="noopener noreferrer">Creative Commons Attribution 4.0 (CC BY 4.0)</a>. Ils ont été modifiés pour le jeu : convertis, remis à l'échelle, couleurs et textures adaptées, logos et étriers retirés sur les voitures. Les auteurs ne cautionnent pas ce jeu.</p>
+    <ul id="creditsList"></ul>
+    <button id="creditsClose" type="button">Fermer</button>
+  </div>
 </div>
 
 <div id="wheel" class="ctl" role="slider" aria-label="Volant : glisse ou touche les flèches" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0">

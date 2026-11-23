@@ -7,8 +7,13 @@
     "test": "node --test test/*.test.mjs"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
     "cannon-es": "^0.20.0",
     "esbuild": "0.24.0",
+    "jpeg-js": "^0.4.4",
+    "pngjs": "^7.0.0",
     "three": "0.170.0"
   }
 }

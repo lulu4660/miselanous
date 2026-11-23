@@ -1,10 +1,12 @@
 // Instanced, chunked vegetation for the three biomes: snowy pines, round trees and grass in
-// the hills, cacti and dry bushes in the canyons, rocks everywhere. Chunks are frustum- and
+// the hills, cacti, dry bushes and sandstone outcrops in the canyons, rocks everywhere. Trees,
+// bushes, rocks, outcrops and cacti are licensed low-poly models (assets/CREDITS.md). Chunks are frustum- and
 // distance-culled; trees, cacti and big rocks are returned as physics obstacles.
 import * as THREE from 'three';
 import { patchMaterial } from './shaders.js';
-import { colorize, colorizeFn, place, merge, hash01 } from './geo.js';
+import { colorize, colorizeFn, place, merge } from './geo.js';
 import { mulberry32 } from '../noise.js';
+import { propVariants } from './assetProps.js';
 
 const up = new THREE.Vector3(0, 1, 0);
 
@@ -69,62 +71,6 @@ function chunkedInstances(geo, mat, items, { chunk = 40, cast = false, receive =
     group.add(im);
   }
   return group;
-}
-
-function blob(rnd, r, detail = 1) {
-  const g = new THREE.IcosahedronGeometry(r, detail);
-  const p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const k = 1 + (hash01(Math.round(x * 50) * 7 + Math.round(y * 50) * 13 + Math.round(z * 50) * 29) - 0.5) * 0.25;
-    p.setXYZ(i, x * k, Math.max(y * k, -r * 0.35), z * k);
-  }
-  g.computeVertexNormals();
-  return g;
-}
-
-
-function pineGeo(rnd, snowy) {
-  const parts = [];
-  const trunk = new THREE.CylinderGeometry(0.16, 0.24, 2.2, 6); place(trunk, { y: 1.1 }); colorize(trunk, '#6b4a3a'); parts.push(trunk);
-  const tiers = 4;
-  for (let t = 0; t < tiers; t++) {
-    const r = 2.1 - t * 0.42, h = 2.0 - t * 0.15, y = 1.6 + t * 1.25;
-    const cone = new THREE.ConeGeometry(r, h, 7, 1); place(cone, { y: y + h / 2, ry: rnd() * 6 });
-    colorizeFn(cone, (x, yy) => (snowy && yy > y + h * 0.15 ? (yy > y + h * 0.45 ? '#f4f7fd' : '#cfdbe8') : t % 2 ? '#3e6b4a' : '#355f43'));
-    parts.push(cone);
-  }
-  const g = merge(parts);
-  const sw = new Float32Array(g.attributes.position.count).fill(1);
-  g.setAttribute('aSway', new THREE.BufferAttribute(sw, 1));
-  return g;
-}
-function roundTreeGeo(rnd) {
-  const parts = [];
-  const trunk = new THREE.CylinderGeometry(0.18, 0.28, 2.6, 6); place(trunk, { y: 1.3 }); colorize(trunk, '#7a5a40'); parts.push(trunk);
-  for (let k = 0; k < 3; k++) {
-    const b = blob(rnd, 1.4 + rnd() * 0.5, 1);
-    place(b, { x: (rnd() - 0.5) * 1.4, y: 3.3 + rnd() * 0.9, z: (rnd() - 0.5) * 1.4 });
-    colorizeFn(b, (x, y) => (y > 3.9 ? '#9cc35c' : y > 3.3 ? '#78a84f' : '#5c8a44'));
-    parts.push(b);
-  }
-  const g = merge(parts);
-  g.setAttribute('aSway', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(1), 1));
-  return g;
-}
-function cactusGeo(rnd) {
-  const parts = [];
-  const main = new THREE.CapsuleGeometry(0.28, 2.6, 3, 8); place(main, { y: 1.55 }); parts.push(main);
-  for (const s of [-1, 1]) {
-    if (rnd() < 0.25) continue;
-    const h = 0.8 + rnd() * 0.7, y = 1.0 + rnd() * 0.8;
-    const arm = new THREE.CapsuleGeometry(0.19, 0.45, 3, 6); arm.rotateZ(Math.PI / 2); place(arm, { x: s * 0.45, y }); parts.push(arm);
-    const up = new THREE.CapsuleGeometry(0.19, h, 3, 6); place(up, { x: s * 0.72, y: y + h / 2 + 0.1 }); parts.push(up);
-  }
-  parts.forEach((p) => colorizeFn(p, (x, y, z) => (Math.abs(Math.atan2(z, x) * 4 % 1) < 0.25 ? '#4f7a46' : '#6a9655')));
-  const g = merge(parts);
-  g.setAttribute('aSway', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(0), 1));
-  return g;
 }
 
 export function createVegetation(world, quality) {
@@ -193,19 +139,68 @@ export function createVegetation(world, quality) {
     return { x, z, y: world.heightAt(x, z) - 0.15, s: 0.5 + rnd() * 0.7, rot: rnd() * 6.28, hue: rnd(), dry: bw[2] > bw[1] };
   });
 
-  const veg = (o) => patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, ...o }), { wind: 0.0012, cutout: 1 });
   const add = (geo, mat, list, opts) => { const g = chunkedInstances(geo, mat, list, { chunk: 80, ...opts }); group.add(g); return g; };
-  const pineMat = veg({ flatShading: true });
-  add(pineGeo(rnd, true), pineMat, pinesSnow, { cast: true });
-  add(pineGeo(rnd, false), pineMat, pinesGreen, { cast: true });
-  add(roundTreeGeo(rnd), veg({ flatShading: true }), trees, { cast: true });
-  add(cactusGeo(rnd), veg({}), cacti, { cast: true });
-  const bushGeo = (() => { const parts = []; for (let k = 0; k < 3; k++) { const b = blob(rnd, 0.55 + rnd() * 0.25, 1); place(b, { x: (rnd() - 0.5) * 0.8, y: 0.3 + rnd() * 0.15, z: (rnd() - 0.5) * 0.8 }); colorizeFn(b, (x, y) => (y > 0.5 ? '#ffffff' : y > 0.2 ? '#dedede' : '#b8b8b8')); parts.push(b); } const g = merge(parts); g.setAttribute('aSway', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(0.5), 1)); return g; })();
-  add(bushGeo, veg({ flatShading: true }), bushes, { cast: true, color: (it) => (it.dry ? new THREE.Color().setHSL(0.11 + it.hue * 0.04, 0.35, 0.5) : new THREE.Color().setHSL(0.24 + it.hue * 0.06, 0.4, 0.42)) });
-  const rockMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), { cutout: 1 });
-  const rockGeo = (() => { const g = new THREE.DodecahedronGeometry(1, 1); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const n = 1 + Math.sin(x * 3.1) * 0.12 + Math.cos(z * 2.7 + y * 1.9) * 0.12; p.setXYZ(i, x * n, y * n * 0.75, z * n); } g.computeVertexNormals(); return colorizeFn(g, (x, y) => (y > 0.4 ? '#ffffff' : '#d9d9d9')); })();
-  const rockTint = ['#9a9cad', '#a7a493', '#c98a62'];
-  add(rockGeo, rockMat, rocks, { cast: true, color: (it) => new THREE.Color(rockTint[it.biome]) });
+
+  // --- licensed models (assets/CREDITS.md), sized like the old procedural ones
+  const PINE = propVariants('pine', ['TreeV1', 'TreeV2', 'TreeV3']);
+  const TREE = propVariants('tree', ['TreeR1', 'TreeR2', 'TreeR3']);
+  const BUSH = propVariants('bush', ['Clump2', 'Clump5', 'Clump6'], { sway: 0.6 });
+  const SHRUB = propVariants('shrub', ['TreeO1', 'TreeO2'], { sway: 0.3 });
+  const ROCK = propVariants('rock', ['RG1', 'RG2', 'RG3'], { sway: 0, grey: 0.6 });
+  const MESA = propVariants('mesa', ['MRock1', 'MRock5'], { sway: 0 });
+  const CACT = propVariants('cactus', ['cactus_2', 'cactus_7', 'cactus_9'], { sway: 0 });
+  // the formations of the canyons: big sandstone outcrops away from the roads
+  const mesas = pick(Math.round(quality.trees * 0.05), 20000, (x, z) => {
+    world.biomeWeights(x, z, bw);
+    const tw = 6 + rnd() * rnd() * 12;
+    if (bw[2] < 0.7 || !free(x, z, 12 + tw * 0.7) || (world.normalAt(x, z, nrm), nrm[1] < 0.85)) return null;
+    return { x, z, y: world.heightAt(x, z) - tw * 0.06, tw, rot: rnd() * 6.28 };
+  }, 0.3);
+  const VCH = 70; // chunk size: small enough that frustum and shadow-box culling skip most far trees
+  // pick a variant and turn the target height (th) or width (tw) into that variant's scale;
+  // returns one list per variant. The variant is picked per chunk (one draw call per chunk
+  // instead of one per variant per chunk): rotation and size still vary per item.
+  const sized = (list, V) => {
+    const per = V.map(() => []);
+    const salt = V[0].name.length * 7 + V.length;
+    for (const it of list) {
+      const k = (Math.floor(it.x / VCH) * 73856093 ^ Math.floor(it.z / VCH) * 19349663 ^ salt * 83492791) >>> 0;
+      const v = V[k % V.length];
+      const sc = it.th ? it.th / v.h : it.tw / v.w;
+      per[k % V.length].push({ ...it, s: sc, sy: it.squash ? sc * it.squash : undefined, hh: v.h * sc * (it.squash || 1), ww: v.w * sc });
+    }
+    return per;
+  };
+  for (const it of pinesSnow) it.th = 7.5 * it.s;
+  for (const it of pinesGreen) it.th = 7.0 * it.s;
+  for (const it of trees) it.th = 6.2 * it.s;
+  for (const it of cacti) it.th = 3.0 * it.s;
+  for (const it of bushes) it.th = (it.dry ? 1.5 : 1.1) * it.s;
+  for (const it of rocks) { it.tw = 2.0 * it.s; it.squash = 0.7 + rnd() * 0.5; it.tilt = 0; }
+  // foliage is made of single planes (boughs, fronds): both sides; rocks and cacti are closed
+  const lambert = (wind, side = THREE.DoubleSide) => patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side }), wind ? { wind, cutout: 1 } : { cutout: 1 });
+  const vegMat = lambert(0.0012), rockMat = lambert(0, THREE.FrontSide);
+  // pines in the snow: snow settles on the upper side of the boughs (the undersides stay green)
+  const snowMat = lambert(0.0012);
+  const prevCompile = snowMat.onBeforeCompile;
+  snowMat.onBeforeCompile = (sh, r) => {
+    prevCompile(sh, r);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vUpN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvUpN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal).y;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vUpN;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.98), smoothstep(0.5, 0.85, gl_FrontFacing ? vUpN : -vUpN) * 0.92);');
+  };
+  snowMat.customProgramCacheKey = () => 'pine-snow';
+  const addV = (V, per, mat, opts = {}) => { per.forEach((list, k) => list.length && add(V[k].geo, mat, list, { chunk: VCH, cast: true, ...opts })); return per.flat(); };
+  const rockTint = ['#a9b3c8', '#b3ad9e', '#e09a6c']; // snow: blue-grey granite, hills: limestone, canyon: red sandstone
+  const pinesSnowS = addV(PINE, sized(pinesSnow, PINE), snowMat);
+  const pinesGreenS = addV(PINE, sized(pinesGreen, PINE), vegMat);
+  const treesS = addV(TREE, sized(trees, TREE), vegMat);
+  const cactiS = addV(CACT, sized(cacti, CACT), rockMat);
+  addV(BUSH, sized(bushes.filter((it) => !it.dry), BUSH), vegMat);
+  addV(SHRUB, sized(bushes.filter((it) => it.dry), SHRUB), vegMat);
+  const rocksS = addV(ROCK, sized(rocks, ROCK), rockMat, { color: (it) => rockTint[it.biome] });
+  const mesasS = addV(MESA, sized(mesas, MESA), rockMat);
 
   // --- grass tufts (green hills, dry canyons), clustered
   const grassMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), { wind: 0.14, push: 2.4 });
@@ -294,10 +289,12 @@ export function createVegetation(world, quality) {
   add(fencePost, postMat, posts[2], { chunk: 80 });
   add(snowPole, postMat, posts[3], { chunk: 80 });
 
-  for (const it of [...pinesSnow, ...pinesGreen]) obstacles.push({ x: it.x, z: it.z, r: 0.3 * it.s + 0.1, y0: it.y - 1, y1: it.y + 6, kind: 'wood' });
-  for (const it of trees) obstacles.push({ x: it.x, z: it.z, r: 0.32 * it.s + 0.1, y0: it.y - 1, y1: it.y + 4, kind: 'wood' });
-  for (const it of cacti) obstacles.push({ x: it.x, z: it.z, r: 0.3 * it.s, y0: it.y - 1, y1: it.y + 3, kind: 'wood' });
-  for (const it of rocks) if (it.s > 1) obstacles.push({ x: it.x, z: it.z, r: it.s * 0.8, y0: it.y - 2, y1: it.y + it.sy * 0.6, kind: 'rock', shape: 'sphere' });
+  for (const it of [...pinesSnowS, ...pinesGreenS]) obstacles.push({ x: it.x, z: it.z, r: Math.max(0.25, 0.045 * it.hh), y0: it.y - 1, y1: it.y + it.hh * 0.6, kind: 'wood' });
+  for (const it of treesS) obstacles.push({ x: it.x, z: it.z, r: Math.max(0.25, 0.055 * it.hh), y0: it.y - 1, y1: it.y + it.hh * 0.5, kind: 'wood' });
+  for (const it of cactiS) obstacles.push({ x: it.x, z: it.z, r: 0.1 * it.hh, y0: it.y - 1, y1: it.y + it.hh, kind: 'wood' });
+  for (const it of rocksS) if (it.ww > 1.6) obstacles.push({ x: it.x, z: it.z, r: it.ww * 0.42, y0: it.y - 2, y1: it.y + it.hh * 0.8, kind: 'rock', shape: 'sphere' });
+  // outcrops: an upright cylinder (a sphere that big would leave a gap to drive under)
+  for (const it of mesasS) obstacles.push({ x: it.x, z: it.z, r: it.ww * 0.36, y0: it.y - 2, y1: it.y + it.hh * 0.9, kind: 'rock' });
 
   // distance culling of whole chunks (cheap: one test per chunk)
   const chunks = [];

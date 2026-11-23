@@ -17,6 +17,7 @@ const entry = `
 import * as THREE from 'three';
 import { VEHICLES } from './src/vehicles.js';
 import { createVehicleModel } from './src/gfx/carModel.js';
+import { whenCarTexturesReady } from './src/gfx/assetCar.js';
 const ids = ${JSON.stringify(ids)};
 const ZOOM = ${process.env.Z ? 1 : 0};
 const DIRT = ${process.env.DIRT ? Number(process.env.DIRT) : 0};
@@ -100,7 +101,7 @@ function render() {
   });
   window.__info = info; window.__done = true;
 }
-render();
+whenCarTexturesReady().then(() => setTimeout(render, 50));
 `;
 const res = await esbuild.build({
   stdin: { contents: entry, resolveDir: root, loader: 'js' },

@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { colorize, colorizeFn, place, merge } from './geo.js';
 import { buildBody } from './bodies.js';
+import { createAssetCar, hasAssetCar } from './assetCar.js';
 
 // ---------------------------------------------------------------------------------------------
 // Wheel: lathe tyre with staggered tread lugs + sidewall ring, 5-spoke dished rim, brake disc behind the spokes.
@@ -146,6 +147,7 @@ if (vBrk > 0.5) { if (uBrake < 0.03) discard; diffuseColor.rgb = vec3(1.0, 0.1, 
 }
 
 export function createVehicleModel(spec, livery) {
+  if (hasAssetCar(spec.id) && !globalThis.__hpProceduralCars) return createAssetCar(spec, livery);
   const M = sharedMats();
   const L = livery || spec.livery;
   const root = new THREE.Group();

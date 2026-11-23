@@ -2,7 +2,7 @@
 // miniature tilt-shift (Horizontal/VerticalTiltShiftShader with an in-focus band) →
 // colour grade + vignette (ShaderPass) → OutputPass (tone mapping + sRGB) → FXAA.
 // (No MSAA on the composer targets: every pass would pay a resolve; one FXAA pass is cheaper.)
-// Effects levels: 0 = direct render, 1 = grade, 2 = + tilt-shift, 3 = + bloom.
+// Effects levels: 0 = direct render, 1 = grade, 2 = + bloom, 3 = + tilt-shift.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -85,8 +85,9 @@ export function createPost(renderer, scene, camera) {
     passes: { bloom, tiltH, tiltV, grade },
     setLevel(n) {
       post.level = post.broken ? 0 : Math.max(0, Math.min(3, n));
-      bloom.enabled = post.level >= 3;
-      tiltH.enabled = tiltV.enabled = post.level >= 2;
+      // 1 grade, 2 + bloom, 3 + the miniature tilt-shift (it softens the car: only when asked for)
+      bloom.enabled = post.level >= 2;
+      tiltH.enabled = tiltV.enabled = post.level >= 3;
       grade.enabled = post.level >= 1;
     },
     setSize(w, h, pr) {

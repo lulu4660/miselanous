@@ -8,6 +8,9 @@ import { U, PALETTE, makeNoiseTexture, makeCellTexture } from './gfx/shaders.js'
 import { createTerrainMesh } from './gfx/terrainMesh.js';
 import { createSky } from './gfx/sky.js';
 import { createVehicleModel } from './gfx/carModel.js';
+import { whenCarTexturesReady } from './gfx/assetCar.js';
+import { CREDITS } from './assets/cars.gen.js';
+import { PROP_CREDITS } from './assets/props.gen.js';
 import { createVegetation } from './gfx/vegetation.js';
 import { createPropMeshes, placeRoadProps } from './gfx/objects.js';
 import { createParticles, createTracks } from './gfx/fx.js';
@@ -32,9 +35,10 @@ async function boot() {
   // ---------- quality
   const coarse = matchMedia('(pointer: coarse)').matches;
   const TIERS = {
-    high: { dpr: 2, shadow: 2048, grass: 5000, trees: 2600, traffic: 6, aa: true, scale: 1, fx: 3, far: 420 },
-    medium: { dpr: 1.5, shadow: 1024, grass: 3000, trees: 1800, traffic: 5, aa: true, scale: 0.85, fx: 2, far: 330 },
-    low: { dpr: 1.2, shadow: 1024, grass: 1500, trees: 1100, traffic: 3, aa: true, scale: 0.75, fx: 1, far: 260 },
+    // dpr: the sharpest the tier may go; scale: where it starts (it climbs while frames keep up)
+    high: { dpr: 2.5, shadow: 2048, grass: 5000, trees: 2600, traffic: 6, aa: true, scale: 1, fx: 3, far: 420 },
+    medium: { dpr: 2.4, shadow: 2048, grass: 3600, trees: 2000, traffic: 5, aa: true, scale: 0.65, fx: 2, far: 340 },
+    low: { dpr: 1.6, shadow: 1024, grass: 1500, trees: 1100, traffic: 3, aa: true, scale: 0.75, fx: 1, far: 260 },
   };
   const tierName = params.get('q') || (coarse ? 'medium' : 'high');
   const quality = TIERS[tierName] || TIERS.medium;
@@ -150,6 +154,7 @@ async function boot() {
   const traffic = createTraffic(phys, world, { count: quality.traffic });
   const aiModels = traffic.cars.map((c) => { const m = createVehicleModel(c.spec, c.livery); scene.add(m.root); return m; });
   await progress(0.85, 'Les moteurs chauffent…');
+  await whenCarTexturesReady(); // no car shows up untextured
 
   // ---------- audio, input, UI
   const audio = createAudio();
@@ -231,6 +236,24 @@ async function boot() {
   $('mPerf').addEventListener('click', togglePerf);
   $('speed').addEventListener('click', togglePerf);
   document.addEventListener('pointerdown', (e) => { if (!$('menu').hidden && !e.target.closest('#menu') && !e.target.closest('#btnMenu')) { $('menu').hidden = true; $('btnMenu').setAttribute('aria-expanded', 'false'); } });
+  // credits of the licensed models (CC BY: title, author, link, licence, modified)
+  {
+    const USE = { pine: 'Arbres, buissons et rochers', mesa: 'Formations rocheuses', cactus: 'Cactus' };
+    const list = $('creditsList');
+    for (const c of [...CREDITS, ...PROP_CREDITS]) {
+      const li = document.createElement('li');
+      const use = document.createElement('span'); use.className = 'use'; use.textContent = VEHICLES[c.for] ? 'Voiture « ' + VEHICLES[c.for].name + ' »' : USE[c.for] || c.for;
+      const b = document.createElement('b'); b.textContent = c.name;
+      const a = document.createElement('a'); a.href = c.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = 'sur Sketchfab';
+      li.append(use, b, 'par ' + c.author + ' — CC BY 4.0 — ', a);
+      list.append(li);
+    }
+    const close = () => { $('credits').hidden = true; };
+    $('mCredits').addEventListener('click', () => { $('menu').hidden = true; $('btnMenu').setAttribute('aria-expanded', 'false'); $('credits').hidden = false; $('creditsList').scrollTop = 0; $('creditsClose').focus({ preventScroll: true }); });
+    $('creditsClose').addEventListener('click', close);
+    $('credits').addEventListener('pointerdown', (e) => { if (e.target === e.currentTarget) close(); });
+    window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && !$('credits').hidden) close(); });
+  }
 
   // respawn on the nearest road point, facing along it
   function nearestRoadPoint(x, z) {
@@ -318,7 +341,7 @@ async function boot() {
     if (view === 'bonnet') {
       cam.yaw = carYaw;
       const bx = car.spec.box, camY = bx.minY + (bx.maxY - bx.minY) * 0.5;
-      localP.x = 0; localP.y = camY; localP.z = bx.maxZ + 0.35; // bumper cam, just ahead of the nose (bull bars, plates and light pods stay out of view)
+      localP.x = 0; localP.y = camY; localP.z = Math.max(bx.maxZ, model.noseZ ?? -9) + 0.35; // bumper cam, just ahead of the nose (bull bars, plates and light pods stay out of view)
       car.body.pointToWorldFrame(localP, worldP);
       camera.position.set(worldP.x, worldP.y, worldP.z);
       localP.y = camY - 0.25; localP.z = V.look;
@@ -590,7 +613,7 @@ async function boot() {
           else if (traffic.nearDist > 90) { traffic.nearDist -= 40; traffic.farDist -= 40; upCooldown = 12; }
           else if (renderScale > 0.5) { renderScale = Math.max(0.5, renderScale - (avg > 0.03 ? 0.15 : 0.08)); maxScale = Math.min(maxScale, renderScale + 0.08); upCooldown = 10; applySize(); }
           else if (post && fxLevel > 0) { fxLevel = 0; post.setLevel(0); }
-        } else if (avg < 0.0178 && upCooldown <= 0 && renderScale < maxScale - 0.001) { renderScale = Math.min(maxScale, renderScale + 0.05); upCooldown = 4; applySize(); }
+        } else if (avg < 0.0178 && upCooldown <= 0 && renderScale < maxScale - 0.001) { renderScale = Math.min(maxScale, renderScale + 0.07); upCooldown = 3; applySize(); }
       }
       const txt = `${Math.round(fpsShown)} i/s · ${renderer.getPixelRatio().toFixed(2)}x · fx ${post ? (post.broken ? 'off' : post.level) : '-'} · ${tierName}`;
       $('garagePerf').textContent = txt;
