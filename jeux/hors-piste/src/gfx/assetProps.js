@@ -45,9 +45,9 @@ export function propVariants(kind, names, { sway = 1, grey = 0, swayRef = 0, dom
     g.setAttribute('aSway', new THREE.BufferAttribute(sw, 1));
     g.setIndex(new THREE.BufferAttribute(decode(p.idx, p.i32 ? Uint32Array : Uint16Array), 1));
     g.computeBoundingSphere();
-    // rLow: widest reach from the origin in the lowest 30 % (car-bumper band): collider size
+    // rLow: widest reach from the origin in the lowest 40 % (car-bumper band): collider size
     let rLow = 0;
-    for (let i = 0; i < pos.length; i += 3) if (pos[i + 1] < p.h * 0.3) rLow = Math.max(rLow, Math.hypot(pos[i], pos[i + 2]));
+    for (let i = 0; i < pos.length; i += 3) if (pos[i + 1] < p.h * 0.4) rLow = Math.max(rLow, Math.hypot(pos[i], pos[i + 2]));
     return { name: p.name, geo: g, h: p.h, w: p.w, tris: p.tris, rLow };
   });
   if (out.length !== names.length) throw new Error(`props ${kind}: expected ${names.join(',')}, found ${out.map((o) => o.name).join(',')}`);

@@ -254,7 +254,7 @@ async function boot() {
     const close = () => { if ($('credits').hidden) return; $('credits').hidden = true; if (game.mode === 'play') input.enabled = true; $('btnMenu').focus({ preventScroll: true }); };
     $('mCredits').addEventListener('click', () => { $('menu').hidden = true; $('btnMenu').setAttribute('aria-expanded', 'false'); $('credits').hidden = false; input.enabled = false; input.reset?.(); $('creditsList').scrollTop = 0; $('creditsClose').focus({ preventScroll: true }); });
     $('creditsClose').addEventListener('click', close);
-    $('credits').addEventListener('pointerdown', (e) => { if (e.target === e.currentTarget) close(); });
+    $('credits').addEventListener('click', (e) => { if (e.target === e.currentTarget) close(); }); // click: after the browser's own focus change
     window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && !$('credits').hidden) close(); });
   }
 
