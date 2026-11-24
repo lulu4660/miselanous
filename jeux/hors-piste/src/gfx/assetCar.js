@@ -6,6 +6,9 @@ import * as THREE from 'three';
 import { TEXTURES, CAR_ASSETS } from '../assets/cars.gen.js';
 
 export const hasAssetCar = (id) => !!CAR_ASSETS[id];
+// decode every car (geometry + texture requests) up front, so the loading screen's wait on
+// whenCarTexturesReady() covers the cars only seen later in the garage
+export const preloadAssetCars = () => { for (const id of Object.keys(CAR_ASSETS)) build(id); };
 
 const G = 9.81;
 const texCache = [];

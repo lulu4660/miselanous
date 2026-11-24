@@ -8,7 +8,7 @@ import { U, PALETTE, makeNoiseTexture, makeCellTexture } from './gfx/shaders.js'
 import { createTerrainMesh } from './gfx/terrainMesh.js';
 import { createSky } from './gfx/sky.js';
 import { createVehicleModel } from './gfx/carModel.js';
-import { whenCarTexturesReady } from './gfx/assetCar.js';
+import { whenCarTexturesReady, preloadAssetCars } from './gfx/assetCar.js';
 import { CREDITS } from './assets/cars.gen.js';
 import { PROP_CREDITS } from './assets/props.gen.js';
 import { createVegetation } from './gfx/vegetation.js';
@@ -154,7 +154,8 @@ async function boot() {
   const traffic = createTraffic(phys, world, { count: quality.traffic });
   const aiModels = traffic.cars.map((c) => { const m = createVehicleModel(c.spec, c.livery); scene.add(m.root); return m; });
   await progress(0.85, 'Les moteurs chauffent…');
-  await whenCarTexturesReady(); // no car shows up untextured
+  if (!globalThis.__hpProceduralCars) preloadAssetCars();
+  await whenCarTexturesReady(); // no car shows up untextured, even the first time it is picked in the garage
 
   // ---------- audio, input, UI
   const audio = createAudio();

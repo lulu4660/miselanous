@@ -183,7 +183,7 @@ export function createVegetation(world, quality) {
       const hh = v.h * sc * (it.squash || 1);
       // flat bases on a slope: sink by the rise across the half-width, so the downhill edge touches
       const ww = v.w * sc * (it.thick || 1);
-      per[k % V.length].push({ ...it, y: it.y - (it.sink || 0) * hh - (it.slope || 0) * ww * 0.5, s: sc * (it.thick || 1), sy: it.squash || it.thick ? sc * (it.squash || 1) : undefined, hh, ww });
+      per[k % V.length].push({ ...it, y: it.y - (it.sink || 0) * hh - (it.slope || 0) * ww * 0.5, s: sc * (it.thick || 1), sy: it.squash || it.thick ? sc * (it.squash || 1) : undefined, hh, ww, rLow: v.rLow * sc * (it.thick || 1) });
     }
     return per;
   };
@@ -329,7 +329,7 @@ export function createVegetation(world, quality) {
 
   for (const it of [...pinesSnowS, ...pinesGreenS]) obstacles.push({ x: it.x, z: it.z, r: Math.max(0.25, 0.045 * it.hh), y0: it.y - 1, y1: it.y + it.hh * 0.6, kind: 'wood' });
   for (const it of treesS) obstacles.push({ x: it.x, z: it.z, r: Math.max(0.25, 0.055 * it.hh), y0: it.y - 1, y1: it.y + it.hh * 0.5, kind: 'wood' });
-  for (const it of cactiS) obstacles.push({ x: it.x, z: it.z, r: 0.2 * it.ww, y0: it.y - 1, y1: it.y + it.hh, kind: 'wood' }); // r: arms included
+  for (const it of cactiS) obstacles.push({ x: it.x, z: it.z, r: Math.max(0.3, it.rLow), y0: it.y - 1, y1: it.y + it.hh, kind: 'wood' }); // r: arms at bumper height included
   for (const it of rocksS) if (it.ww > 1.6) obstacles.push({ x: it.x, z: it.z, r: it.ww * 0.42, y0: it.y - 2, y1: it.y + it.hh * 0.8, kind: 'rock', shape: 'sphere' });
   // outcrops: an upright cylinder (a sphere that big would leave a gap to drive under)
   for (const it of mesasS) obstacles.push({ x: it.x, z: it.z, r: it.ww * 0.46, y0: it.y - 2, y1: it.y + it.hh * 0.9, kind: 'rock' });
