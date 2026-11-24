@@ -63,9 +63,10 @@ function build(id) {
   return b;
 }
 
-// paint: livery colour, clearcoat, object-space dirt line (same look as the procedural cars)
-function makePaint(colorHex, floorY) {
-  const U = { uDirt: { value: 0 }, uDirtColor: { value: new THREE.Color('#8a6a46') }, uFloor: { value: floorY } };
+// paint: livery colour with twin rally stripes in the secondary colour (bonnet, roof, boot),
+// clearcoat, object-space dirt line (same look as the procedural cars)
+function makePaint(colorHex, stripeHex, floorY) {
+  const U = { uDirt: { value: 0 }, uDirtColor: { value: new THREE.Color('#8a6a46') }, uFloor: { value: floorY }, uStripe: { value: new THREE.Color(stripeHex || colorHex) }, uStripeOn: { value: stripeHex ? 1 : 0 } };
   const mat = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(colorHex), roughness: 0.34, metalness: 0.15, clearcoat: 0.8, clearcoatRoughness: 0.1, envMapIntensity: 1.0, side: THREE.DoubleSide });
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, U);
@@ -74,11 +75,16 @@ function makePaint(colorHex, floorY) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvLp = position;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-varying vec3 vLp; uniform float uDirt; uniform vec3 uDirtColor; uniform float uFloor;
+varying vec3 vLp; uniform float uDirt; uniform vec3 uDirtColor; uniform float uFloor; uniform vec3 uStripe; uniform float uStripeOn;
 float hsh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
   return mix(mix(hsh(i), hsh(i+vec2(1,0)), f.x), mix(hsh(i+vec2(0,1)), hsh(i+vec2(1,1)), f.x), f.y); }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
+{
+  float ax = abs(vLp.x), e = fwidth(ax) * 0.75 + 1e-4;
+  float st = smoothstep(0.07 - e, 0.07 + e, ax) * (1.0 - smoothstep(0.21 - e, 0.21 + e, ax));
+  diffuseColor.rgb = mix(diffuseColor.rgb, uStripe, st * uStripeOn);
+}
 float dirtM = 0.0;
 if (uDirt > 0.001) {
   float n = vn(vLp.xz * 6.0 + vLp.y * 3.0) * 0.6 + vn(vLp.xz * 17.0 + vLp.y * 9.0) * 0.4;
@@ -123,7 +129,7 @@ export function createAssetCar(spec, livery) {
   const model = new THREE.Group();
   model.position.set(0, oy, oz);
   body.add(model);
-  const paint = makePaint(L.primary, A.bounds.min[1]);
+  const paint = makePaint(L.primary, L.secondary, A.bounds.min[1]);
   const brakeU = { v: 0 };
   const brakeMats = [];
   const wheelNodes = {};
