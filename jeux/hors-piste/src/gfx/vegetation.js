@@ -129,10 +129,14 @@ export function createVegetation(world, quality) {
     return { x, z, y: world.heightAt(x, z) - 0.1, s: 0.8 + rnd() * 0.6, rot: rnd() * 6.28 };
   });
   const rocks = pick(quality.trees * 0.4, 40000, (x, z) => {
-    const s = 0.5 + rnd() * rnd() * 2.4;
+    let s = 0.4 + Math.pow(rnd(), 2.2) * 2.2; // mostly small
+    const gy = world.heightAt(x, z);
+    // on a crest (higher than the ground around) a big rock stands against the sky: keep it small
+    const crest = gy - (world.heightAt(x + 6, z) + world.heightAt(x - 6, z) + world.heightAt(x, z + 6) + world.heightAt(x, z - 6)) / 4;
+    if (crest > 0.6) s = Math.min(s, 0.8);
     if (!free(x, z, 7.5 + s * 1.2)) return null; // big rocks keep clear of the carriageway
     world.biomeWeights(x, z, bw);
-    return { x, z, y: world.heightAt(x, z) - s * 0.3, s, rot: rnd() * 6.28, tilt: (rnd() - 0.5) * 0.5, sy: s * (0.6 + rnd() * 0.5), biome: bw.indexOf(Math.max(...bw)) };
+    return { x, z, y: gy, sink: 0.3, s, rot: rnd() * 6.28, biome: bw.indexOf(Math.max(...bw)) };
   });
   const bushes = pick(quality.trees * 0.5, 30000, (x, z) => {
     if (!free(x, z, 6)) return null;
@@ -145,10 +149,10 @@ export function createVegetation(world, quality) {
 
   // --- licensed models (assets/CREDITS.md), sized like the old procedural ones
   const PINE = propVariants('pine', ['TreeV1', 'TreeV2', 'TreeV3'], { swayRef: 7.5 });
-  const TREE = propVariants('tree', ['TreeR1', 'TreeR2', 'TreeR3'], { swayRef: 6.2 });
-  const BUSH = propVariants('bush', ['Clump2', 'Clump5', 'Clump6'], { sway: 0.6, swayRef: 0.8 });
+  const TREE = propVariants('tree', ['TreeR1', 'TreeR2'], { swayRef: 6.2 }); // TreeR3's small balls on twigs looked sparse
+  const BUSH = propVariants('bush', ['Clump2', 'Clump5', 'Clump6'], { sway: 0.6, swayRef: 0.8, domeNormals: true });
   // the same rosettes, greyed then tinted dusty sage: agaves in the canyons
-  const AGAVE = propVariants('bush', ['Clump2', 'Clump5', 'Clump6'], { sway: 0.4, swayRef: 0.8, grey: 0.4 });
+  const AGAVE = propVariants('bush', ['Clump2', 'Clump5', 'Clump6'], { sway: 0.4, swayRef: 0.8, grey: 0.5, domeNormals: true });
   const ROCK = propVariants('rock', ['RG1', 'RG2', 'RG3'], { sway: 0, grey: 0.8 });
   const MESA = propVariants('mesa', ['MRock1', 'MRock3', 'MRock4'], { sway: 0 });
   const CACT = propVariants('cactus', ['cactus_2', 'cactus_7', 'cactus_9'], { sway: 0 });
@@ -171,7 +175,8 @@ export function createVegetation(world, quality) {
       const v = V[k % V.length];
       const sc = it.th ? it.th / v.h : it.tw / v.w;
       // thick: wider than tall (thin twigs and cacti turn into flickering lines at a distance)
-      per[k % V.length].push({ ...it, s: sc * (it.thick || 1), sy: it.squash || it.thick ? sc * (it.squash || 1) : undefined, hh: v.h * sc * (it.squash || 1), ww: v.w * sc * (it.thick || 1) });
+      const hh = v.h * sc * (it.squash || 1);
+      per[k % V.length].push({ ...it, y: it.y - (it.sink || 0) * hh, s: sc * (it.thick || 1), sy: it.squash || it.thick ? sc * (it.squash || 1) : undefined, hh: v.h * sc * (it.squash || 1), ww: v.w * sc * (it.thick || 1) });
     }
     return per;
   };
@@ -179,37 +184,54 @@ export function createVegetation(world, quality) {
   for (const it of pinesGreen) it.th = 7.0 * it.s;
   for (const it of trees) it.th = 6.2 * it.s;
   for (const it of cacti) { it.th = 3.0 * it.s; it.thick = 1.4; }
-  for (const it of bushes) it.tw = (it.dry ? 1.7 : 2.0) * it.s; // rosettes are flat and wide: sized by width
+  for (const it of bushes) { it.tw = (it.dry ? 1.7 : 2.0) * it.s; it.squash = 0.8; } // rosettes are flat and wide: sized by width
   for (const it of rocks) { it.tw = 2.0 * it.s; it.squash = 0.7 + rnd() * 0.5; it.tilt = 0; }
   // foliage is made of single planes (boughs, fronds): both sides; rocks and cacti are closed
   const lambert = (wind, side = THREE.DoubleSide) => patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side }), wind ? { wind, cutout: 1 } : { cutout: 1 });
   const vegMat = lambert(0.0012);
-  // rocks, outcrops, cacti: more sky fill in the shade (their shaded faces went near-black)
-  const rockMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true }), { cutout: 1, extraFrag: (f) => f.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.indirectDiffuse *= 1.7;') });
-  // pines in the snow: snow settles on the upper side of the boughs (the undersides stay green)
-  const snowMat = lambert(0.0012);
-  const prevCompile = snowMat.onBeforeCompile;
-  snowMat.onBeforeCompile = (sh, r) => {
-    prevCompile(sh, r);
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vUpN;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvUpN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal).y;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vUpN;')
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.98), smoothstep(0.5, 0.85, gl_FrontFacing ? vUpN : -vUpN) * 0.92);');
+  // rocks, cacti: more sky fill in the shade (their shaded faces went near-black)
+  const rockMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true }), { cutout: 1, extraFrag: (f) => f.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.indirectDiffuse *= 1.35;') });
+  // firs: the underside of the boughs darker and greyer (it read lime); in the snow, snow settles
+  // on the upper side. The bough planes are double-sided: the side facing up decides.
+  const firMat = (snow) => {
+    const m = lambert(0.0012);
+    const prev = m.onBeforeCompile;
+    m.onBeforeCompile = (sh, r) => {
+      prev(sh, r);
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vUpN;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvUpN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal).y;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vUpN;')
+        .replace('#include <color_fragment>', `#include <color_fragment>
+{
+  float upN = gl_FrontFacing ? vUpN : -vUpN;
+  float under = smoothstep(0.0, 0.5, -upN);
+  float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+  diffuseColor.rgb = mix(diffuseColor.rgb, lum * vec3(0.62, 0.8, 0.78), under * 0.55) * (1.0 - under * 0.3);
+  ${snow ? 'diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.98), smoothstep(0.5, 0.85, upN) * 0.92);' : ''}
+}`);
+    };
+    m.customProgramCacheKey = () => (snow ? 'fir-snow' : 'fir');
+    return m;
   };
-  snowMat.customProgramCacheKey = () => 'pine-snow';
+  const snowMat = firMat(true), firGreenMat = firMat(false);
+  // rosettes (ferns, agaves): soft dome normals baked in, used on both sides as they are (the
+  // planes' winding is arbitrary, so the default back-face flip turned half the leaves black)
+  const rosetteMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), { wind: 0.0012, cutout: 1, extraFrag: (f) => f.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize(vNormal);') });
+  // outcrops: faceted like the cliffs
+  const mesaMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), { cutout: 1, extraFrag: (f) => f.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.indirectDiffuse *= 1.35;') });
   const addV = (V, per, mat, opts = {}) => { per.forEach((list, k) => list.length && add(V[k].geo, mat, list, { chunk: VCH, cast: quality.treeShadows !== false, ...opts })); return per.flat(); };
   const rockTint = ['#b8c2d6', '#c8c0b0', '#e8a878']; // snow: blue-grey granite, hills: limestone, canyon: red sandstone
   const pinesSnowS = addV(PINE, sized(pinesSnow, PINE), snowMat);
-  const pinesGreenS = addV(PINE, sized(pinesGreen, PINE), vegMat);
+  const pinesGreenS = addV(PINE, sized(pinesGreen, PINE), firGreenMat);
   // canopies a cooler green than the grass, varied per tree
   const TREE_TINT = ['#bceeff', '#c8f2f0', '#b0e4f4'];
   const h2 = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
   const treesS = addV(TREE, sized(trees, TREE), vegMat, { color: (it) => TREE_TINT[Math.floor(h2(it.x, it.z) * 3)] });
-  const cactiS = addV(CACT, sized(cacti, CACT), rockMat);
-  addV(BUSH, sized(bushes.filter((it) => !it.dry), BUSH), vegMat, { reach: 0.45 });
-  addV(AGAVE, sized(bushes.filter((it) => it.dry), AGAVE), vegMat, { reach: 0.45, color: (it) => (it.hue > 0.5 ? '#b9c69a' : '#d2c896') });
+  const cactiS = addV(CACT, sized(cacti, CACT), rockMat, { color: () => '#c2faff' }); // back to a blue-green, apart from the ochre ground
+  addV(BUSH, sized(bushes.filter((it) => !it.dry), BUSH), rosetteMat, { reach: 0.45 });
+  addV(AGAVE, sized(bushes.filter((it) => it.dry), AGAVE), rosetteMat, { reach: 0.45, color: (it) => (it.hue > 0.5 ? '#cbdbb0' : '#d8d4a8') });
   const rocksS = addV(ROCK, sized(rocks, ROCK), rockMat, { color: (it) => rockTint[it.biome], reach: 0.6 });
-  const mesasS = addV(MESA, sized(mesas, MESA), rockMat);
+  const mesasS = addV(MESA, sized(mesas, MESA), mesaMat);
 
   // --- grass tufts (green hills, dry canyons), clustered
   const grassMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), { wind: 0.14, push: 2.4 });

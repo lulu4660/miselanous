@@ -42,8 +42,8 @@ function plainPlates() {
   const g = cv.getContext('2d');
   g.clearRect(0, 0, 256, 256);
   for (const x0 of [0, 128]) {
-    g.fillStyle = '#2b2730'; g.fillRect(x0 + 1, 191, 126, 64);
-    g.fillStyle = '#efe4d0'; g.fillRect(x0 + 5, 196, 118, 55);
+    g.fillStyle = '#3a3440'; g.fillRect(x0 + 1, 191, 126, 64);
+    g.fillStyle = '#cfc3ad'; g.fillRect(x0 + 5, 196, 118, 55); // warm grey: not the brightest patch of the car
   }
   plateTex = new THREE.CanvasTexture(cv);
   plateTex.colorSpace = THREE.SRGBColorSpace;

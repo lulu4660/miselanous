@@ -15,15 +15,21 @@ const cache = new Map();
 // per-instance colour then tints it, e.g. rocks per biome).
 // swayRef: the in-game height (m) the wind shader should see at the top. Its bend grows with the
 // square of the object-space height, and these models are not modelled at their in-game size.
-export function propVariants(kind, names, { sway = 1, grey = 0, swayRef = 0 } = {}) {
-  const key = [kind, names.join(','), sway, grey, swayRef].join(':');
+// domeNormals: normals pointing up and out from the base centre (soft, blob-like lighting for
+// clumps of single-plane leaves)
+export function propVariants(kind, names, { sway = 1, grey = 0, swayRef = 0, domeNormals = false } = {}) {
+  const key = [kind, names.join(','), sway, grey, swayRef, domeNormals].join(':');
   if (cache.has(key)) return cache.get(key);
   const list = PROP_ASSETS[kind].filter((p) => names.includes(p.name)).sort((a, b) => names.indexOf(a.name) - names.indexOf(b.name));
   const out = list.map((p) => {
     const g = new THREE.BufferGeometry();
     const pos = decode(p.pos, Float32Array);
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(decode(p.nrm, Int8Array), 3, true));
+    if (domeNormals) {
+      const n = new Float32Array(pos.length);
+      for (let i = 0; i < pos.length; i += 3) { const x = pos[i], y = p.h, z = pos[i + 2], l = Math.hypot(x, y, z); n[i] = x / l; n[i + 1] = y / l; n[i + 2] = z / l; }
+      g.setAttribute('normal', new THREE.BufferAttribute(n, 3));
+    } else g.setAttribute('normal', new THREE.BufferAttribute(decode(p.nrm, Int8Array), 3, true));
     const c8 = decode(p.col, Uint8Array), col = new Float32Array(c8.length);
     for (let i = 0; i < c8.length; i++) { const v = c8[i] / 255; col[i] = v * v; } // sqrt-encoded linear
     if (grey) {
