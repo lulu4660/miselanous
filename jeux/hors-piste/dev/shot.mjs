@@ -129,6 +129,7 @@ else if (scenario === 'props') {
   // stop the car a few metres from one example of each vegetation / rock model and look at it
   const spots = await page.evaluate(() => window.__mb.veg.spots);
   for (const [k, s] of Object.entries(spots)) {
+    if (process.env.SPOTS && !process.env.SPOTS.split(',').includes(k)) continue;
     await page.evaluate((s) => {
       const mb = window.__mb, w = mb.world;
       // nearest road point, then stand on the road facing the model

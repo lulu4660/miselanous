@@ -147,15 +147,16 @@ export function createVegetation(world, quality) {
   const PINE = propVariants('pine', ['TreeV1', 'TreeV2', 'TreeV3'], { swayRef: 7.5 });
   const TREE = propVariants('tree', ['TreeR1', 'TreeR2', 'TreeR3'], { swayRef: 6.2 });
   const BUSH = propVariants('bush', ['Clump2', 'Clump5', 'Clump6'], { sway: 0.6, swayRef: 0.8 });
-  const SHRUB = propVariants('shrub', ['TreeO1', 'TreeO2'], { sway: 0.3, swayRef: 1.5 });
-  const ROCK = propVariants('rock', ['RG1', 'RG2', 'RG3'], { sway: 0, grey: 0.6 });
-  const MESA = propVariants('mesa', ['MRock1', 'MRock5'], { sway: 0 });
+  // the same rosettes, greyed then tinted dusty sage: agaves in the canyons
+  const AGAVE = propVariants('bush', ['Clump2', 'Clump5', 'Clump6'], { sway: 0.4, swayRef: 0.8, grey: 0.4 });
+  const ROCK = propVariants('rock', ['RG1', 'RG2', 'RG3'], { sway: 0, grey: 0.8 });
+  const MESA = propVariants('mesa', ['MRock1', 'MRock3', 'MRock4'], { sway: 0 });
   const CACT = propVariants('cactus', ['cactus_2', 'cactus_7', 'cactus_9'], { sway: 0 });
   // the formations of the canyons: big sandstone outcrops away from the roads
   const mesas = pick(Math.round(quality.trees * 0.05), 20000, (x, z) => {
     world.biomeWeights(x, z, bw);
-    const tw = 6 + rnd() * rnd() * 12;
-    if (bw[2] < 0.7 || !free(x, z, 12 + tw * 0.7) || (world.normalAt(x, z, nrm), nrm[1] < 0.85)) return null;
+    const tw = 4 + rnd() * rnd() * 7;
+    if (bw[2] < 0.7 || !free(x, z, 16 + tw) || (world.normalAt(x, z, nrm), nrm[1] < 0.85)) return null;
     return { x, z, y: world.heightAt(x, z) - tw * 0.06, tw, rot: rnd() * 6.28 };
   }, 0.3);
   const VCH = 70; // chunk size: small enough that frustum and shadow-box culling skip most far trees
@@ -169,19 +170,22 @@ export function createVegetation(world, quality) {
       const k = (Math.floor(it.x / VCH) * 73856093 ^ Math.floor(it.z / VCH) * 19349663 ^ salt * 83492791) >>> 0;
       const v = V[k % V.length];
       const sc = it.th ? it.th / v.h : it.tw / v.w;
-      per[k % V.length].push({ ...it, s: sc, sy: it.squash ? sc * it.squash : undefined, hh: v.h * sc * (it.squash || 1), ww: v.w * sc });
+      // thick: wider than tall (thin twigs and cacti turn into flickering lines at a distance)
+      per[k % V.length].push({ ...it, s: sc * (it.thick || 1), sy: it.squash || it.thick ? sc * (it.squash || 1) : undefined, hh: v.h * sc * (it.squash || 1), ww: v.w * sc * (it.thick || 1) });
     }
     return per;
   };
   for (const it of pinesSnow) it.th = 7.5 * it.s;
   for (const it of pinesGreen) it.th = 7.0 * it.s;
   for (const it of trees) it.th = 6.2 * it.s;
-  for (const it of cacti) it.th = 3.0 * it.s;
-  for (const it of bushes) { if (it.dry) it.th = 1.5 * it.s; else it.tw = 2.0 * it.s; } // ferns are flat and wide: sized by width
+  for (const it of cacti) { it.th = 3.0 * it.s; it.thick = 1.4; }
+  for (const it of bushes) it.tw = (it.dry ? 1.7 : 2.0) * it.s; // rosettes are flat and wide: sized by width
   for (const it of rocks) { it.tw = 2.0 * it.s; it.squash = 0.7 + rnd() * 0.5; it.tilt = 0; }
   // foliage is made of single planes (boughs, fronds): both sides; rocks and cacti are closed
   const lambert = (wind, side = THREE.DoubleSide) => patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side }), wind ? { wind, cutout: 1 } : { cutout: 1 });
-  const vegMat = lambert(0.0012), rockMat = lambert(0, THREE.FrontSide);
+  const vegMat = lambert(0.0012);
+  // rocks, outcrops, cacti: more sky fill in the shade (their shaded faces went near-black)
+  const rockMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true }), { cutout: 1, extraFrag: (f) => f.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.indirectDiffuse *= 1.7;') });
   // pines in the snow: snow settles on the upper side of the boughs (the undersides stay green)
   const snowMat = lambert(0.0012);
   const prevCompile = snowMat.onBeforeCompile;
@@ -194,13 +198,16 @@ export function createVegetation(world, quality) {
   };
   snowMat.customProgramCacheKey = () => 'pine-snow';
   const addV = (V, per, mat, opts = {}) => { per.forEach((list, k) => list.length && add(V[k].geo, mat, list, { chunk: VCH, cast: quality.treeShadows !== false, ...opts })); return per.flat(); };
-  const rockTint = ['#a9b3c8', '#b3ad9e', '#e09a6c']; // snow: blue-grey granite, hills: limestone, canyon: red sandstone
+  const rockTint = ['#b8c2d6', '#c8c0b0', '#e8a878']; // snow: blue-grey granite, hills: limestone, canyon: red sandstone
   const pinesSnowS = addV(PINE, sized(pinesSnow, PINE), snowMat);
   const pinesGreenS = addV(PINE, sized(pinesGreen, PINE), vegMat);
-  const treesS = addV(TREE, sized(trees, TREE), vegMat);
+  // canopies a cooler green than the grass, varied per tree
+  const TREE_TINT = ['#bceeff', '#c8f2f0', '#b0e4f4'];
+  const h2 = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
+  const treesS = addV(TREE, sized(trees, TREE), vegMat, { color: (it) => TREE_TINT[Math.floor(h2(it.x, it.z) * 3)] });
   const cactiS = addV(CACT, sized(cacti, CACT), rockMat);
   addV(BUSH, sized(bushes.filter((it) => !it.dry), BUSH), vegMat, { reach: 0.45 });
-  addV(SHRUB, sized(bushes.filter((it) => it.dry), SHRUB), vegMat, { reach: 0.45 });
+  addV(AGAVE, sized(bushes.filter((it) => it.dry), AGAVE), vegMat, { reach: 0.45, color: (it) => (it.hue > 0.5 ? '#b9c69a' : '#d2c896') });
   const rocksS = addV(ROCK, sized(rocks, ROCK), rockMat, { color: (it) => rockTint[it.biome], reach: 0.6 });
   const mesasS = addV(MESA, sized(mesas, MESA), rockMat);
 
@@ -303,7 +310,7 @@ export function createVegetation(world, quality) {
   // one example of each model near a road (dev captures look at them up close)
   const near = (list) => list.reduce((b, it) => (world.roadDistAt(it.x, it.z) < world.roadDistAt(b.x, b.z) ? it : b), list[0]);
   const spots = {};
-  for (const [k, list] of Object.entries({ firSnow: pinesSnowS, fir: pinesGreenS, tree: treesS, cactus: cactiS, rock: rocksS, outcrop: mesasS, fern: bushes.filter((it) => !it.dry), shrub: bushes.filter((it) => it.dry) })) if (list.length) { const it = near(list); spots[k] = { x: it.x, z: it.z }; }
+  for (const [k, list] of Object.entries({ firSnow: pinesSnowS, fir: pinesGreenS, tree: treesS, cactus: cactiS, rock: rocksS.filter((it) => it.biome === 2), rockHills: rocksS.filter((it) => it.biome === 1), rockSnow: rocksS.filter((it) => it.biome === 0), outcrop: mesasS, fern: bushes.filter((it) => !it.dry), agave: bushes.filter((it) => it.dry) })) if (list.length) { const it = near(list); spots[k] = { x: it.x, z: it.z }; }
   return {
     group, obstacles, spots,
     cull(camPos, far) {

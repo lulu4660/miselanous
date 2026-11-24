@@ -266,9 +266,8 @@ const PROPS = [ // unit: the pack's length unit in metres (the nature pack is in
   { kind: 'pine', uid: '9c773e846c6e4448b26b2cdecb2b91bf', nodes: /^TreeV[123]$/, unit: 0.01 },
   { kind: 'tree', uid: '9c773e846c6e4448b26b2cdecb2b91bf', nodes: /^TreeR[123]$/, unit: 0.01 },
   { kind: 'bush', uid: '9c773e846c6e4448b26b2cdecb2b91bf', nodes: /^Clump[256]$/, unit: 0.01 },
-  { kind: 'shrub', uid: '9c773e846c6e4448b26b2cdecb2b91bf', nodes: /^TreeO[12]$/, unit: 0.01 },
   { kind: 'rock', uid: '9c773e846c6e4448b26b2cdecb2b91bf', nodes: /^RG[123]$/, unit: 0.01 },
-  { kind: 'mesa', uid: '726e8563eb634c529410f4e00857bbb3', nodes: /^MRock[15]$/, unit: 0.01 },
+  { kind: 'mesa', uid: '726e8563eb634c529410f4e00857bbb3', nodes: /^MRock[134]$/, unit: 0.01 },
   { kind: 'cactus', uid: '588596f1601d48e6ad4cb24b31c3f33c', nodes: /^cactus_[279]$/, unit: 1 },
 ];
 const srgbToLin = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));

@@ -32,6 +32,25 @@ function decode(b64, Type) {
   return new Type(u8.buffer);
 }
 
+// The models' number plates use a real-world plate atlas (state names, glyphs placed as separate
+// quads). Swap it for plain cream plates: the atlas is alpha-blended, so leaving everything but the
+// two plate backgrounds (bottom quarter) transparent hides the glyphs and stickers.
+let plateTex = null;
+function plainPlates() {
+  if (plateTex) return plateTex;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const g = cv.getContext('2d');
+  g.clearRect(0, 0, 256, 256);
+  for (const x0 of [0, 128]) {
+    g.fillStyle = '#2b2730'; g.fillRect(x0 + 1, 191, 126, 64);
+    g.fillStyle = '#efe4d0'; g.fillRect(x0 + 5, 196, 118, 55);
+  }
+  plateTex = new THREE.CanvasTexture(cv);
+  plateTex.colorSpace = THREE.SRGBColorSpace;
+  plateTex.flipY = false; // glTF UV convention
+  return plateTex;
+}
+
 // decoded geometry and shared materials, per car id
 const built = new Map();
 function build(id) {
@@ -50,7 +69,7 @@ function build(id) {
     if (m.role === 'paint' || m.role === 'brake') return null; // per instance
     const opts = {
       color: new THREE.Color().setRGB(...m.color, THREE.SRGBColorSpace),
-      map: m.tex >= 0 ? texture(m.tex) : null,
+      map: /Numberplates/i.test(m.name) ? plainPlates() : m.tex >= 0 ? texture(m.tex) : null,
       metalness: m.metal, roughness: Math.max(0.05, m.rough), side: THREE.DoubleSide,
     };
     if (m.role === 'glass') Object.assign(opts, { transparent: true, opacity: Math.max(0.35, m.opacity), roughness: 0.05, metalness: 0.25, envMapIntensity: 1.3, depthWrite: false });

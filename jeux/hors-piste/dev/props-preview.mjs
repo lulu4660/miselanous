@@ -8,7 +8,7 @@ import { resolve, dirname } from 'node:path';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const out = process.argv[2] || '/tmp/props-preview.png';
-const kinds = (process.argv[3] || 'pine,tree,bush,shrub,rock,mesa,cactus').split(',');
+const kinds = (process.argv[3] || 'pine,tree,bush,rock,mesa,cactus').split(',');
 mkdirSync(dirname(out), { recursive: true });
 const root = resolve(import.meta.dirname, '..');
 const entry = `
@@ -18,7 +18,7 @@ import { propVariants } from './src/gfx/assetProps.js';
 const kinds = ${JSON.stringify(kinds)};
 const SNOW = ${process.env.SNOW ? 1 : 0};
 const GREY = ${Number(process.env.GREY || 0)}, TINT = '${process.env.TINT || '#ffffff'}'; // rocks: greyed and tinted like in the game
-const TARGET = { pine: 7.5, tree: 6.2, bush: 1.1, shrub: 1.5, cactus: 3, rock: 0, mesa: 0 }; // heights (m); rocks/mesas by width
+const TARGET = { pine: 7.5, tree: 6.2, bush: 1.1, cactus: 3, rock: 0, mesa: 0 }; // heights (m); rocks/mesas by width
 const WIDTH = { rock: 3, mesa: 12 };
 const W = 1400, H = 360;
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
