@@ -102,6 +102,9 @@ export function createVegetation(world, quality) {
     return out;
   };
   const bw = [0, 0, 0];
+  // how far the ground falls below (x, z) within radius r (8 samples): flat-based models must not
+  // sit on the edge of a drop
+  const dropAround = (x, z, r) => { const h0 = world.heightAt(x, z); let d = 0; for (let k = 0; k < 8; k++) { const a = k * 0.785; d = Math.max(d, h0 - world.heightAt(x + Math.cos(a) * r, z + Math.sin(a) * r)); } return d; };
   const lush = (x, z) => Math.sin(x * 0.013 + Math.cos(z * 0.011) * 2) * 0.5 + 0.5;
 
   // --- pines: snow biome and the upper hills
@@ -135,8 +138,10 @@ export function createVegetation(world, quality) {
     const crest = gy - (world.heightAt(x + 6, z) + world.heightAt(x - 6, z) + world.heightAt(x, z + 6) + world.heightAt(x, z - 6)) / 4;
     if (crest > 0.6) s = Math.min(s, 0.8);
     if (!free(x, z, 7.5 + s * 1.2)) return null; // big rocks keep clear of the carriageway
+    world.normalAt(x, z, nrm);
+    if (nrm[1] < 0.7 || (s > 1.2 && nrm[1] < 0.85) || dropAround(x, z, s) > 0.25 + s * 0.3) return null; // flat-based: no big rock on a steep slope or an edge
     world.biomeWeights(x, z, bw);
-    return { x, z, y: gy, sink: 0.3, s, rot: rnd() * 6.28, biome: bw.indexOf(Math.max(...bw)) };
+    return { x, z, y: gy, sink: 0.3, s, rot: rnd() * 6.28, biome: bw.indexOf(Math.max(...bw)), slope: Math.sqrt(1 - nrm[1] * nrm[1]) / nrm[1] };
   });
   const bushes = pick(quality.trees * 0.5, 30000, (x, z) => {
     if (!free(x, z, 6)) return null;
@@ -160,8 +165,8 @@ export function createVegetation(world, quality) {
   const mesas = pick(Math.round(quality.trees * 0.05), 20000, (x, z) => {
     world.biomeWeights(x, z, bw);
     const tw = 4 + rnd() * rnd() * 7;
-    if (bw[2] < 0.7 || !free(x, z, 16 + tw) || (world.normalAt(x, z, nrm), nrm[1] < 0.85)) return null;
-    return { x, z, y: world.heightAt(x, z) - tw * 0.06, tw, rot: rnd() * 6.28 };
+    if (bw[2] < 0.7 || !free(x, z, 16 + tw) || (world.normalAt(x, z, nrm), nrm[1] < 0.85) || dropAround(x, z, tw * 0.5) > 0.35 + tw * 0.1) return null;
+    return { x, z, y: world.heightAt(x, z) - tw * 0.06, tw, rot: rnd() * 6.28, slope: Math.sqrt(Math.max(0, 1 - nrm[1] * nrm[1])) / nrm[1] };
   }, 0.3);
   const VCH = 70; // chunk size: small enough that frustum and shadow-box culling skip most far trees
   // pick a variant and turn the target height (th) or width (tw) into that variant's scale;
@@ -169,14 +174,16 @@ export function createVegetation(world, quality) {
   // instead of one per variant per chunk): rotation and size still vary per item.
   const sized = (list, V) => {
     const per = V.map(() => []);
-    const salt = V[0].name.length * 7 + V.length;
+    let salt = V.length; for (const c of V.map((v) => v.name).join()) salt = (salt * 31 + c.charCodeAt(0)) | 0; // per model set
     for (const it of list) {
       const k = (Math.floor(it.x / VCH) * 73856093 ^ Math.floor(it.z / VCH) * 19349663 ^ salt * 83492791) >>> 0;
       const v = V[k % V.length];
       const sc = it.th ? it.th / v.h : it.tw / v.w;
       // thick: wider than tall (thin twigs and cacti turn into flickering lines at a distance)
       const hh = v.h * sc * (it.squash || 1);
-      per[k % V.length].push({ ...it, y: it.y - (it.sink || 0) * hh, s: sc * (it.thick || 1), sy: it.squash || it.thick ? sc * (it.squash || 1) : undefined, hh: v.h * sc * (it.squash || 1), ww: v.w * sc * (it.thick || 1) });
+      // flat bases on a slope: sink by the rise across the half-width, so the downhill edge touches
+      const ww = v.w * sc * (it.thick || 1);
+      per[k % V.length].push({ ...it, y: it.y - (it.sink || 0) * hh - (it.slope || 0) * ww * 0.5, s: sc * (it.thick || 1), sy: it.squash || it.thick ? sc * (it.squash || 1) : undefined, hh, ww });
     }
     return per;
   };
@@ -219,14 +226,15 @@ export function createVegetation(world, quality) {
   const rosetteMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), { wind: 0.0012, cutout: 1, extraFrag: (f) => f.replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nnormal = normalize(vNormal);') });
   // outcrops: faceted like the cliffs
   const mesaMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), { cutout: 1, extraFrag: (f) => f.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\nreflectedLight.indirectDiffuse *= 1.35;') });
-  const addV = (V, per, mat, opts = {}) => { per.forEach((list, k) => list.length && add(V[k].geo, mat, list, { chunk: VCH, cast: quality.treeShadows !== false, ...opts })); return per.flat(); };
+  const addV = (V, per, mat, opts = {}) => { per.forEach((list, k) => list.length && add(V[k].geo, mat, list, { chunk: VCH, cast: true, ...opts })); return per.flat(); };
   const rockTint = ['#b8c2d6', '#c8c0b0', '#e8a878']; // snow: blue-grey granite, hills: limestone, canyon: red sandstone
-  const pinesSnowS = addV(PINE, sized(pinesSnow, PINE), snowMat);
-  const pinesGreenS = addV(PINE, sized(pinesGreen, PINE), firGreenMat);
+  const treeCast = quality.treeShadows !== false; // low tier: the firs' shadow pass is half the triangles
+  const pinesSnowS = addV(PINE, sized(pinesSnow, PINE), snowMat, { cast: treeCast });
+  const pinesGreenS = addV(PINE, sized(pinesGreen, PINE), firGreenMat, { cast: treeCast });
   // canopies a cooler green than the grass, varied per tree
   const TREE_TINT = ['#bceeff', '#c8f2f0', '#b0e4f4'];
   const h2 = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
-  const treesS = addV(TREE, sized(trees, TREE), vegMat, { color: (it) => TREE_TINT[Math.floor(h2(it.x, it.z) * 3)] });
+  const treesS = addV(TREE, sized(trees, TREE), vegMat, { cast: treeCast, color: (it) => TREE_TINT[Math.floor(h2(it.x, it.z) * 3)] });
   const cactiS = addV(CACT, sized(cacti, CACT), rockMat, { color: () => '#c2faff' }); // back to a blue-green, apart from the ochre ground
   addV(BUSH, sized(bushes.filter((it) => !it.dry), BUSH), rosetteMat, { reach: 0.45 });
   addV(AGAVE, sized(bushes.filter((it) => it.dry), AGAVE), rosetteMat, { reach: 0.45, color: (it) => (it.hue > 0.5 ? '#cbdbb0' : '#d8d4a8') });
@@ -321,10 +329,10 @@ export function createVegetation(world, quality) {
 
   for (const it of [...pinesSnowS, ...pinesGreenS]) obstacles.push({ x: it.x, z: it.z, r: Math.max(0.25, 0.045 * it.hh), y0: it.y - 1, y1: it.y + it.hh * 0.6, kind: 'wood' });
   for (const it of treesS) obstacles.push({ x: it.x, z: it.z, r: Math.max(0.25, 0.055 * it.hh), y0: it.y - 1, y1: it.y + it.hh * 0.5, kind: 'wood' });
-  for (const it of cactiS) obstacles.push({ x: it.x, z: it.z, r: 0.1 * it.hh, y0: it.y - 1, y1: it.y + it.hh, kind: 'wood' });
+  for (const it of cactiS) obstacles.push({ x: it.x, z: it.z, r: 0.2 * it.ww, y0: it.y - 1, y1: it.y + it.hh, kind: 'wood' }); // r: arms included
   for (const it of rocksS) if (it.ww > 1.6) obstacles.push({ x: it.x, z: it.z, r: it.ww * 0.42, y0: it.y - 2, y1: it.y + it.hh * 0.8, kind: 'rock', shape: 'sphere' });
   // outcrops: an upright cylinder (a sphere that big would leave a gap to drive under)
-  for (const it of mesasS) obstacles.push({ x: it.x, z: it.z, r: it.ww * 0.36, y0: it.y - 2, y1: it.y + it.hh * 0.9, kind: 'rock' });
+  for (const it of mesasS) obstacles.push({ x: it.x, z: it.z, r: it.ww * 0.46, y0: it.y - 2, y1: it.y + it.hh * 0.9, kind: 'rock' });
 
   // distance culling of whole chunks (cheap: one test per chunk)
   const chunks = [];

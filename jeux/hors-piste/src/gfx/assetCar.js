@@ -153,12 +153,17 @@ export function createAssetCar(spec, livery) {
   const brakeMats = [];
   const wheelNodes = {};
   for (const s of ['FL', 'FR', 'RL', 'RR']) { const w = A.wheels[s]; const n = new THREE.Group(); n.position.set(w.x, w.y, w.z); n.rotation.order = 'YXZ'; model.add(n); wheelNodes[s] = n; }
+  // per wheel: lift or drop the model's wheel so its tyre meets the ground where the physics tyre
+  // does (front and rear radii can differ between the model and the physics, e.g. the buggy)
+  const wheelFix = ['FL', 'FR', 'RL', 'RR'].map((s, i) => (spec.wheels[i].y - (spec.restLength - restComp) - spec.wheels[i].radius) - (oy + A.wheels[s].y - A.wheels[s].r));
   for (const p of parts) {
     const m = A.mats[p.mat];
     let mat = mats[p.mat];
     if (m.role === 'paint') mat = paint.mat;
     else if (m.role === 'brake') {
-      mat = new THREE.MeshStandardMaterial({ map: m.tex >= 0 ? texture(m.tex) : null, color: new THREE.Color().setRGB(...m.color, THREE.SRGBColorSpace), emissive: new THREE.Color('#ff2a1a'), emissiveMap: m.tex >= 0 ? texture(m.tex) : null, emissiveIntensity: 0.15, roughness: 0.3, side: THREE.DoubleSide });
+      // the glow is not masked by the light atlas: on some models the lens area of the atlas is
+      // nearly black, so a masked glow never showed
+      mat = new THREE.MeshStandardMaterial({ map: m.tex >= 0 ? texture(m.tex) : null, color: new THREE.Color().setRGB(...m.color, THREE.SRGBColorSpace), emissive: new THREE.Color('#ff2a1a'), emissiveIntensity: 0.05, roughness: 0.3, side: THREE.DoubleSide });
       brakeMats.push(mat);
     }
     const mesh = new THREE.Mesh(p.geo, mat);
@@ -193,12 +198,12 @@ export function createAssetCar(spec, livery) {
       for (let i = 0; i < 4; i++) {
         const cw = car.wheels[i], n = wheelNodes[SLOTS[i]], w = A.wheels[SLOTS[i]];
         // suspension travel relative to the static rest, steer about y, roll about the axle (x)
-        n.position.y = w.y + (spec.restLength - restComp - cw.suspLen);
+        n.position.y = w.y + wheelFix[i] + (spec.restLength - restComp - cw.suspLen);
         n.rotation.set(cw.spin, cw.steerAngle, 0);
       }
       const braking = ((car.throttle < -0.05 || car.brake > 0.1) && car.forwardSpeed > 0.5) || car.input.handbrake;
       brakeU.v += ((braking ? 1 : 0) - brakeU.v) * Math.min(1, dt * 12);
-      for (const m of brakeMats) m.emissiveIntensity = 0.15 + 2.2 * brakeU.v;
+      for (const m of brakeMats) m.emissiveIntensity = 0.05 + 2.3 * brakeU.v;
     },
   };
   // rest pose

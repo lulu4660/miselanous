@@ -10,7 +10,7 @@ const world = createWorld(11);
 const veg = createVegetation(world, { trees: +(process.argv[2] || 1800), grass: 0 });
 for (const id of (process.env.ONLY ? process.env.ONLY.split(',') : VEHICLE_ORDER)) {
   const phys = createPhysics(world);
-  for (const o of veg.obstacles) phys.addObstacle(o);
+  for (const o of veg.obstacles) phys.addObstacle({ ...o }); // a copy per world: streaming keeps the body on the object
   placeRoadProps(world, phys.props);
   const car = phys.addVehicle(VEHICLES[id]);
   const road = world.loop;

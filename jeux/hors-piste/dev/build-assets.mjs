@@ -263,12 +263,12 @@ console.log(`textures ${texList.length}, module ${(js.length / 1024 / 1024).toFi
 // metres, +y up), colours sampled from its texture at each vertex (these packs use gradient /
 // palette atlases) into linear vertex colours, ready for the instanced vegetation.
 const PROPS = [ // unit: the pack's length unit in metres (the nature pack is in centimetres)
-  { kind: 'pine', uid: '9c773e846c6e4448b26b2cdecb2b91bf', nodes: /^TreeV[123]$/, unit: 0.01 },
-  { kind: 'tree', uid: '9c773e846c6e4448b26b2cdecb2b91bf', nodes: /^TreeR[123]$/, unit: 0.01 },
+  { kind: 'pine', uid: '9c773e846c6e4448b26b2cdecb2b91bf', nodes: /^TreeV[123]$/, unit: 0.01, trunk: true },
+  { kind: 'tree', uid: '9c773e846c6e4448b26b2cdecb2b91bf', nodes: /^TreeR[12]$/, unit: 0.01, trunk: true },
   { kind: 'bush', uid: '9c773e846c6e4448b26b2cdecb2b91bf', nodes: /^Clump[256]$/, unit: 0.01 },
   { kind: 'rock', uid: '9c773e846c6e4448b26b2cdecb2b91bf', nodes: /^RG[123]$/, unit: 0.01 },
   { kind: 'mesa', uid: '726e8563eb634c529410f4e00857bbb3', nodes: /^MRock[134]$/, unit: 0.01 },
-  { kind: 'cactus', uid: '588596f1601d48e6ad4cb24b31c3f33c', nodes: /^cactus_[279]$/, unit: 1 },
+  { kind: 'cactus', uid: '588596f1601d48e6ad4cb24b31c3f33c', nodes: /^cactus_[279]$/, unit: 1, trunk: true },
 ];
 const srgbToLin = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 const decodedCache = new Map();
@@ -323,9 +323,16 @@ async function bakeProps() {
       // base at y = 0, centred on its footprint
       let mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
       for (let i = 0; i < pos.length; i += 3) for (let k = 0; k < 3; k++) { mn[k] = Math.min(mn[k], pos[i + k]); mx[k] = Math.max(mx[k], pos[i + k]); }
-      const cx = (mn[0] + mx[0]) / 2, cz = (mn[2] + mx[2]) / 2;
+      // trees and cacti: origin on the trunk (the centroid of the lowest 8 % of the vertices), where
+      // the game puts their collider; rocks: the middle of the bounding box
+      let cx = (mn[0] + mx[0]) / 2, cz = (mn[2] + mx[2]) / 2;
+      if (P.trunk) {
+        let sx = 0, sz = 0, n = 0;
+        for (let i = 0; i < pos.length; i += 3) if (pos[i + 1] < mn[1] + (mx[1] - mn[1]) * 0.08) { sx += pos[i]; sz += pos[i + 2]; n++; }
+        if (n) { cx = sx / n; cz = sz / n; }
+      }
       for (let i = 0; i < pos.length; i += 3) { pos[i] -= cx; pos[i + 1] -= mn[1]; pos[i + 2] -= cz; }
-      const h = mx[1] - mn[1], w = Math.max(mx[0] - mn[0], mx[2] - mn[2]);
+      const h = mx[1] - mn[1], w = Math.max(mx[0] - mn[0], mx[2] - mn[2]); // w: bounding box (sizing), whatever the origin
       const nv = pos.length / 3;
       out[P.kind].push({
         name: top.getName(), h: +h.toFixed(3), w: +w.toFixed(3), n: nv, tris: idx.length / 3,

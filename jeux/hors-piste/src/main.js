@@ -245,11 +245,13 @@ async function boot() {
       const use = document.createElement('span'); use.className = 'use'; use.textContent = VEHICLES[c.for] ? 'Voiture « ' + VEHICLES[c.for].name + ' »' : USE[c.for] || c.for;
       const b = document.createElement('b'); b.textContent = c.name;
       const a = document.createElement('a'); a.href = c.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = c.url.replace(/^https?:\/\//, '');
-      li.append(use, b, 'par ' + c.author + ' — CC BY 4.0 — ', a);
+      const lic = /CC0|public domain/i.test(c.license) ? 'CC0' : 'CC BY 4.0';
+      li.append(use, b, 'par ' + c.author + ' — ' + lic + ' — ', a);
       list.append(li);
     }
-    const close = () => { $('credits').hidden = true; };
-    $('mCredits').addEventListener('click', () => { $('menu').hidden = true; $('btnMenu').setAttribute('aria-expanded', 'false'); $('credits').hidden = false; $('creditsList').scrollTop = 0; $('creditsClose').focus({ preventScroll: true }); });
+    // the dialog holds the controls (keys would still drive the car behind it)
+    const close = () => { if ($('credits').hidden) return; $('credits').hidden = true; if (game.mode === 'play') input.enabled = true; $('btnMenu').focus({ preventScroll: true }); };
+    $('mCredits').addEventListener('click', () => { $('menu').hidden = true; $('btnMenu').setAttribute('aria-expanded', 'false'); $('credits').hidden = false; input.enabled = false; input.reset?.(); $('creditsList').scrollTop = 0; $('creditsClose').focus({ preventScroll: true }); });
     $('creditsClose').addEventListener('click', close);
     $('credits').addEventListener('pointerdown', (e) => { if (e.target === e.currentTarget) close(); });
     window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && !$('credits').hidden) close(); });
@@ -403,7 +405,7 @@ async function boot() {
   let hornWas = false;
   function drive() {
     const inp = input.read();
-    if (game.mode !== 'play') { car.input.throttle = 0; car.input.steer = 0; car.input.brake = 0.6; car.input.handbrake = false; return inp; }
+    if (game.mode !== 'play' || !input.enabled) { car.input.throttle = 0; car.input.steer = 0; car.input.brake = 0.6; car.input.handbrake = false; return inp; }
     car.input.throttle = inp.throttle; car.input.steer = inp.steer; car.input.brake = inp.brake; car.input.handbrake = inp.handbrake;
     return inp;
   }
