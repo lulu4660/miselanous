@@ -132,14 +132,14 @@ export function createVegetation(world, quality) {
     return { x, z, y: world.heightAt(x, z) - 0.1, s: 0.8 + rnd() * 0.6, rot: rnd() * 6.28 };
   });
   const rocks = pick(quality.trees * 0.4, 40000, (x, z) => {
-    let s = 0.4 + Math.pow(rnd(), 2.2) * 2.2; // mostly small
+    let s = 0.4 + Math.pow(rnd(), 2.2) * 1.8; // mostly small
     const gy = world.heightAt(x, z);
     // on a crest (higher than the ground around) a big rock stands against the sky: keep it small
-    const crest = gy - (world.heightAt(x + 6, z) + world.heightAt(x - 6, z) + world.heightAt(x, z + 6) + world.heightAt(x, z - 6)) / 4;
-    if (crest > 0.6) s = Math.min(s, 0.8);
+    const ring = (r) => gy - (world.heightAt(x + r, z) + world.heightAt(x - r, z) + world.heightAt(x, z + r) + world.heightAt(x, z - r)) / 4;
+    if (ring(6) > 0.6 || ring(14) > 1.2) s = Math.min(s, 0.8); // crests and shoulders
     if (!free(x, z, 7.5 + s * 1.2)) return null; // big rocks keep clear of the carriageway
     world.normalAt(x, z, nrm);
-    if (nrm[1] < 0.7 || (s > 1.2 && nrm[1] < 0.85) || dropAround(x, z, s) > 0.25 + s * 0.3) return null; // flat-based: no big rock on a steep slope or an edge
+    if (nrm[1] < 0.8 || (s > 1.2 && nrm[1] < 0.88) || dropAround(x, z, s) > 0.25 + s * 0.3) return null; // flat-based: no big rock on a steep slope or an edge
     world.biomeWeights(x, z, bw);
     return { x, z, y: gy, sink: 0.3, s, rot: rnd() * 6.28, biome: bw.indexOf(Math.max(...bw)), slope: Math.sqrt(1 - nrm[1] * nrm[1]) / nrm[1] };
   });
@@ -147,7 +147,7 @@ export function createVegetation(world, quality) {
     if (!free(x, z, 6)) return null;
     world.biomeWeights(x, z, bw);
     if (bw[0] > 0.5) return null;
-    return { x, z, y: world.heightAt(x, z) - 0.15, s: 0.5 + rnd() * 0.7, rot: rnd() * 6.28, hue: rnd(), dry: bw[2] > bw[1] };
+    return { x, z, y: world.heightAt(x, z) - 0.03, s: 0.5 + rnd() * 0.7, rot: rnd() * 6.28, hue: rnd(), dry: bw[2] > bw[1] };
   });
 
   const add = (geo, mat, list, opts) => { const g = chunkedInstances(geo, mat, list, { chunk: 80, ...opts }); group.add(g); return g; };
@@ -181,9 +181,10 @@ export function createVegetation(world, quality) {
       const sc = it.th ? it.th / v.h : it.tw / v.w;
       // thick: wider than tall (thin twigs and cacti turn into flickering lines at a distance)
       const hh = v.h * sc * (it.squash || 1);
-      // flat bases on a slope: sink by the rise across the half-width, so the downhill edge touches
+      // flat bases on a slope: sink by the rise across the half-width, so the downhill edge touches;
+      // never more than half buried (a buried part still casts its shadow through the ground)
       const ww = v.w * sc * (it.thick || 1);
-      per[k % V.length].push({ ...it, y: it.y - (it.sink || 0) * hh - (it.slope || 0) * ww * 0.5, s: sc * (it.thick || 1), sy: it.squash || it.thick ? sc * (it.squash || 1) : undefined, hh, ww, rLow: v.rLow * sc * (it.thick || 1) });
+      per[k % V.length].push({ ...it, y: it.y - Math.min((it.sink || 0) * hh + (it.slope || 0) * ww * 0.5, hh * 0.5), s: sc * (it.thick || 1), sy: it.squash || it.thick ? sc * (it.squash || 1) : undefined, hh, ww, rLow: v.rLow * sc * (it.thick || 1) });
     }
     return per;
   };
@@ -192,7 +193,7 @@ export function createVegetation(world, quality) {
   for (const it of trees) it.th = 6.2 * it.s;
   for (const it of cacti) { it.th = 3.0 * it.s; it.thick = 1.4; }
   for (const it of bushes) { it.tw = (it.dry ? 1.7 : 2.0) * it.s; it.squash = 0.8; } // rosettes are flat and wide: sized by width
-  for (const it of rocks) { it.tw = 2.0 * it.s; it.squash = 0.7 + rnd() * 0.5; it.tilt = 0; }
+  for (const it of rocks) { it.tw = 2.0 * it.s; it.squash = 0.6 + rnd() * 0.4; it.tilt = 0; }
   // foliage is made of single planes (boughs, fronds): both sides; rocks and cacti are closed
   const lambert = (wind, side = THREE.DoubleSide) => patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side }), wind ? { wind, cutout: 1 } : { cutout: 1 });
   const vegMat = lambert(0.0012);
