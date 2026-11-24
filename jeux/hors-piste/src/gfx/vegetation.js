@@ -44,7 +44,8 @@ function bladeTuft(rnd, { blades = 6, hMin = 0.4, hMax = 0.85, base = '#9a8a4a',
   return g;
 }
 
-function chunkedInstances(geo, mat, items, { chunk = 40, cast = false, receive = true, color } = {}) {
+// reach: draw distance as a share of the fog distance (small things fade out sooner)
+function chunkedInstances(geo, mat, items, { chunk = 40, cast = false, receive = true, color, reach = 1 } = {}) {
   const group = new THREE.Group();
   const buckets = new Map();
   for (const it of items) {
@@ -67,6 +68,7 @@ function chunkedInstances(geo, mat, items, { chunk = 40, cast = false, receive =
     });
     im.instanceMatrix.needsUpdate = true;
     im.castShadow = cast; im.receiveShadow = receive;
+    im.userData.reach = reach;
     im.computeBoundingSphere();
     group.add(im);
   }
@@ -142,10 +144,10 @@ export function createVegetation(world, quality) {
   const add = (geo, mat, list, opts) => { const g = chunkedInstances(geo, mat, list, { chunk: 80, ...opts }); group.add(g); return g; };
 
   // --- licensed models (assets/CREDITS.md), sized like the old procedural ones
-  const PINE = propVariants('pine', ['TreeV1', 'TreeV2', 'TreeV3']);
-  const TREE = propVariants('tree', ['TreeR1', 'TreeR2', 'TreeR3']);
-  const BUSH = propVariants('bush', ['Clump2', 'Clump5', 'Clump6'], { sway: 0.6 });
-  const SHRUB = propVariants('shrub', ['TreeO1', 'TreeO2'], { sway: 0.3 });
+  const PINE = propVariants('pine', ['TreeV1', 'TreeV2', 'TreeV3'], { swayRef: 7.5 });
+  const TREE = propVariants('tree', ['TreeR1', 'TreeR2', 'TreeR3'], { swayRef: 6.2 });
+  const BUSH = propVariants('bush', ['Clump2', 'Clump5', 'Clump6'], { sway: 0.6, swayRef: 0.8 });
+  const SHRUB = propVariants('shrub', ['TreeO1', 'TreeO2'], { sway: 0.3, swayRef: 1.5 });
   const ROCK = propVariants('rock', ['RG1', 'RG2', 'RG3'], { sway: 0, grey: 0.6 });
   const MESA = propVariants('mesa', ['MRock1', 'MRock5'], { sway: 0 });
   const CACT = propVariants('cactus', ['cactus_2', 'cactus_7', 'cactus_9'], { sway: 0 });
@@ -175,7 +177,7 @@ export function createVegetation(world, quality) {
   for (const it of pinesGreen) it.th = 7.0 * it.s;
   for (const it of trees) it.th = 6.2 * it.s;
   for (const it of cacti) it.th = 3.0 * it.s;
-  for (const it of bushes) it.th = (it.dry ? 1.5 : 1.1) * it.s;
+  for (const it of bushes) { if (it.dry) it.th = 1.5 * it.s; else it.tw = 2.0 * it.s; } // ferns are flat and wide: sized by width
   for (const it of rocks) { it.tw = 2.0 * it.s; it.squash = 0.7 + rnd() * 0.5; it.tilt = 0; }
   // foliage is made of single planes (boughs, fronds): both sides; rocks and cacti are closed
   const lambert = (wind, side = THREE.DoubleSide) => patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true, side }), wind ? { wind, cutout: 1 } : { cutout: 1 });
@@ -191,15 +193,15 @@ export function createVegetation(world, quality) {
       .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.93, 0.98), smoothstep(0.5, 0.85, gl_FrontFacing ? vUpN : -vUpN) * 0.92);');
   };
   snowMat.customProgramCacheKey = () => 'pine-snow';
-  const addV = (V, per, mat, opts = {}) => { per.forEach((list, k) => list.length && add(V[k].geo, mat, list, { chunk: VCH, cast: true, ...opts })); return per.flat(); };
+  const addV = (V, per, mat, opts = {}) => { per.forEach((list, k) => list.length && add(V[k].geo, mat, list, { chunk: VCH, cast: quality.treeShadows !== false, ...opts })); return per.flat(); };
   const rockTint = ['#a9b3c8', '#b3ad9e', '#e09a6c']; // snow: blue-grey granite, hills: limestone, canyon: red sandstone
   const pinesSnowS = addV(PINE, sized(pinesSnow, PINE), snowMat);
   const pinesGreenS = addV(PINE, sized(pinesGreen, PINE), vegMat);
   const treesS = addV(TREE, sized(trees, TREE), vegMat);
   const cactiS = addV(CACT, sized(cacti, CACT), rockMat);
-  addV(BUSH, sized(bushes.filter((it) => !it.dry), BUSH), vegMat);
-  addV(SHRUB, sized(bushes.filter((it) => it.dry), SHRUB), vegMat);
-  const rocksS = addV(ROCK, sized(rocks, ROCK), rockMat, { color: (it) => rockTint[it.biome] });
+  addV(BUSH, sized(bushes.filter((it) => !it.dry), BUSH), vegMat, { reach: 0.45 });
+  addV(SHRUB, sized(bushes.filter((it) => it.dry), SHRUB), vegMat, { reach: 0.45 });
+  const rocksS = addV(ROCK, sized(rocks, ROCK), rockMat, { color: (it) => rockTint[it.biome], reach: 0.6 });
   const mesasS = addV(MESA, sized(mesas, MESA), rockMat);
 
   // --- grass tufts (green hills, dry canyons), clustered
@@ -219,8 +221,8 @@ export function createVegetation(world, quality) {
       list.push({ x, z, y: world.heightAt(x, z) - 0.03, s: 0.8 + rnd() * 0.6, rot: rnd() * 6.28 });
     }
   }
-  add(greenGeo, grassMat, greens, { chunk: 50 });
-  add(dryGeo, grassMat, drys, { chunk: 50 });
+  add(greenGeo, grassMat, greens, { chunk: 50, reach: 0.45 });
+  add(dryGeo, grassMat, drys, { chunk: 50, reach: 0.45 });
 
   // --- wild flowers in the green hills, in drifts along the verges (instance colour = petal tint)
   const flowerGeo = (() => {
@@ -251,8 +253,7 @@ export function createVegetation(world, quality) {
       flowers.push({ x, z, y: world.heightAt(x, z) - 0.02, s: 0.8 + rnd() * 0.5, rot: rnd() * 6.28, hue });
     }
   }
-  const flowerGroup = add(flowerGeo, grassMat, flowers, { chunk: 50, color: (it) => it.hue });
-  flowerGroup.traverse((o) => { if (o.isInstancedMesh) o.userData.near = true; }); // small things: short draw distance
+  add(flowerGeo, grassMat, flowers, { chunk: 50, color: (it) => it.hue, reach: 0.3 });
 
   // --- roadside markers: reflector posts on asphalt, striped snow poles, wooden fence posts on dirt
   const postMat = patchMaterial(new THREE.MeshLambertMaterial({ vertexColors: true }), { cutout: 1 });
@@ -285,9 +286,9 @@ export function createVegetation(world, quality) {
       }
     }
   }
-  add(reflector, postMat, posts[1], { chunk: 80 });
-  add(fencePost, postMat, posts[2], { chunk: 80 });
-  add(snowPole, postMat, posts[3], { chunk: 80 });
+  add(reflector, postMat, posts[1], { chunk: 80, reach: 0.45 });
+  add(fencePost, postMat, posts[2], { chunk: 80, reach: 0.45 });
+  add(snowPole, postMat, posts[3], { chunk: 80, reach: 0.45 });
 
   for (const it of [...pinesSnowS, ...pinesGreenS]) obstacles.push({ x: it.x, z: it.z, r: Math.max(0.25, 0.045 * it.hh), y0: it.y - 1, y1: it.y + it.hh * 0.6, kind: 'wood' });
   for (const it of treesS) obstacles.push({ x: it.x, z: it.z, r: Math.max(0.25, 0.055 * it.hh), y0: it.y - 1, y1: it.y + it.hh * 0.5, kind: 'wood' });
@@ -299,14 +300,18 @@ export function createVegetation(world, quality) {
   // distance culling of whole chunks (cheap: one test per chunk)
   const chunks = [];
   group.traverse((o) => { if (o.isInstancedMesh) { o.geometry.computeBoundingSphere(); chunks.push(o); } });
+  // one example of each model near a road (dev captures look at them up close)
+  const near = (list) => list.reduce((b, it) => (world.roadDistAt(it.x, it.z) < world.roadDistAt(b.x, b.z) ? it : b), list[0]);
+  const spots = {};
+  for (const [k, list] of Object.entries({ firSnow: pinesSnowS, fir: pinesGreenS, tree: treesS, cactus: cactiS, rock: rocksS, outcrop: mesasS, fern: bushes.filter((it) => !it.dry), shrub: bushes.filter((it) => it.dry) })) if (list.length) { const it = near(list); spots[k] = { x: it.x, z: it.z }; }
   return {
-    group, obstacles,
+    group, obstacles, spots,
     cull(camPos, far) {
       for (const m of chunks) {
         const bs = m.boundingSphere;
         if (!bs) { m.computeBoundingSphere(); continue; }
         const d = Math.hypot(bs.center.x - camPos.x, bs.center.z - camPos.z) - bs.radius;
-        m.visible = d < far * (m.userData.near ? 0.3 : m.geometry.attributes.position.count < 200 ? 0.45 : 1);
+        m.visible = d < far * m.userData.reach;
       }
     },
   };

@@ -38,7 +38,7 @@ async function boot() {
     // dpr: the sharpest the tier may go; scale: where it starts (it climbs while frames keep up)
     high: { dpr: 2.5, shadow: 2048, grass: 5000, trees: 2600, traffic: 6, aa: true, scale: 1, fx: 3, far: 420 },
     medium: { dpr: 2.4, shadow: 2048, grass: 3600, trees: 2000, traffic: 5, aa: true, scale: 0.65, fx: 2, far: 340 },
-    low: { dpr: 1.6, shadow: 1024, grass: 1500, trees: 1100, traffic: 3, aa: true, scale: 0.75, fx: 1, far: 260 },
+    low: { dpr: 1.6, shadow: 1024, grass: 1500, trees: 1100, traffic: 3, aa: true, scale: 0.75, fx: 1, far: 260, treeShadows: false }, // the firs' shadow pass is half the triangles
   };
   const tierName = params.get('q') || (coarse ? 'medium' : 'high');
   const quality = TIERS[tierName] || TIERS.medium;
@@ -244,7 +244,7 @@ async function boot() {
       const li = document.createElement('li');
       const use = document.createElement('span'); use.className = 'use'; use.textContent = VEHICLES[c.for] ? 'Voiture « ' + VEHICLES[c.for].name + ' »' : USE[c.for] || c.for;
       const b = document.createElement('b'); b.textContent = c.name;
-      const a = document.createElement('a'); a.href = c.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = 'sur Sketchfab';
+      const a = document.createElement('a'); a.href = c.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = c.url.replace(/^https?:\/\//, '');
       li.append(use, b, 'par ' + c.author + ' — CC BY 4.0 — ', a);
       list.append(li);
     }
@@ -525,7 +525,7 @@ async function boot() {
 
   // ---------- loop
   let last = performance.now(), hudT = 0, perfAcc = 0, perfN = 0, perfT = 0, fpsShown = 60, fpsAcc = 0, fpsN = 0;
-  window.__mb = { phys, world, game, camera, renderer, scene, quality, traffic, post, get car() { return car; }, start, setFx: (n) => { fxLevel = n; post?.setLevel(n); }, setView: (v) => { view = v; cam.snap = true; }, swapCar };
+  window.__mb = { phys, world, game, veg, camera, renderer, scene, quality, traffic, post, get car() { return car; }, start, setFx: (n) => { fxLevel = n; post?.setLevel(n); }, setView: (v) => { view = v; cam.snap = true; }, swapCar };
 
   function frame(now) {
     requestAnimationFrame(frame);

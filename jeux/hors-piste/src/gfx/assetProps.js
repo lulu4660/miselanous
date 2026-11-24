@@ -12,9 +12,11 @@ function decode(b64, Type) {
 const cache = new Map();
 // kind: 'pine' | 'tree' | 'bush' | 'rock' | 'mesa' | 'cactus'; names: which variants, in order
 // grey: replace the colours by their luminance, rescaled so the model's mean is this value (the
-// per-instance colour then tints it, e.g. rocks per biome)
-export function propVariants(kind, names, { sway = 1, grey = 0 } = {}) {
-  const key = kind + ':' + names.join(',') + ':' + sway + ':' + grey;
+// per-instance colour then tints it, e.g. rocks per biome).
+// swayRef: the in-game height (m) the wind shader should see at the top. Its bend grows with the
+// square of the object-space height, and these models are not modelled at their in-game size.
+export function propVariants(kind, names, { sway = 1, grey = 0, swayRef = 0 } = {}) {
+  const key = [kind, names.join(','), sway, grey, swayRef].join(':');
   if (cache.has(key)) return cache.get(key);
   const list = PROP_ASSETS[kind].filter((p) => names.includes(p.name)).sort((a, b) => names.indexOf(a.name) - names.indexOf(b.name));
   const out = list.map((p) => {
@@ -32,7 +34,8 @@ export function propVariants(kind, names, { sway = 1, grey = 0 } = {}) {
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
     const sw = new Float32Array(p.n);
-    for (let i = 0; i < p.n; i++) sw[i] = sway ? Math.pow(Math.max(0, Math.min(1, pos[i * 3 + 1] / p.h)), 1.5) * sway : 0;
+    const k = sway * (swayRef ? swayRef / p.h : 1);
+    for (let i = 0; i < p.n; i++) sw[i] = k ? Math.pow(Math.max(0, Math.min(1, pos[i * 3 + 1] / p.h)), 1.5) * k : 0;
     g.setAttribute('aSway', new THREE.BufferAttribute(sw, 1));
     g.setIndex(new THREE.BufferAttribute(decode(p.idx, p.i32 ? Uint32Array : Uint16Array), 1));
     g.computeBoundingSphere();

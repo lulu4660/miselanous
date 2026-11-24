@@ -25,6 +25,7 @@ console.log('boot ms', Date.now() - t0);
 const errOn = await page.evaluate(() => document.getElementById('err').classList.contains('on') ? document.getElementById('errCode').textContent : null);
 if (errOn) { console.log('ERROR OVERLAY:', errOn); console.log(logs.join('\n')); await browser.close(); process.exit(1); }
 const wait = (ms) => page.waitForTimeout(ms);
+if (process.env.NOSHADOW) await page.evaluate(() => { window.__mb.renderer.shadowMap.enabled = false; window.__mb.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; }); }); // measure the shadow pass share
 const snap = async (name) => { await page.screenshot({ path: `${out}/${name}.png` }); console.log('shot', name); };
 const state = () => page.evaluate(() => { const c = window.__mb.car; return { v: +c.forwardSpeed.toFixed(2), thr: c.input.throttle, steer: +c.input.steer.toFixed(2), brake: c.input.brake, surf: document.getElementById('surf').textContent, kmh: document.getElementById('kmh').textContent, x: +c.pos.x.toFixed(1), z: +c.pos.z.toFixed(1) }; });
 // keyboard-free driving: override the input mapping each frame
@@ -122,6 +123,23 @@ else if (scenario === 'beauty') {
     const info = await page.evaluate(() => new Promise((res) => { const r = window.__mb.renderer; r.info.autoReset = false; r.info.reset(); requestAnimationFrame(() => { const o = { calls: r.info.render.calls, tris: r.info.render.triangles }; r.info.autoReset = true; res(o); }); }));
     console.log('beauty', t, JSON.stringify(info));
     await page.keyboard.up('ArrowUp'); await wait(200);
+  }
+}
+else if (scenario === 'props') {
+  // stop the car a few metres from one example of each vegetation / rock model and look at it
+  const spots = await page.evaluate(() => window.__mb.veg.spots);
+  for (const [k, s] of Object.entries(spots)) {
+    await page.evaluate((s) => {
+      const mb = window.__mb, w = mb.world;
+      // nearest road point, then stand on the road facing the model
+      let best = null, bd = Infinity;
+      for (const r of w.roads) for (const p of r.pts) { const d = (p.x - s.x) ** 2 + (p.z - s.z) ** 2; if (d < bd) { bd = d; best = p; } }
+      const dx = s.x - best.x, dz = s.z - best.z, L = Math.hypot(dx, dz) || 1;
+      const back = Math.max(0, L - 12);
+      mb.phys.resetCar(mb.car, best.x - (dx / L) * 6 + (dx / L) * Math.min(back, 4), best.z - (dz / L) * 6 + (dz / L) * Math.min(back, 4), Math.atan2(dx, dz));
+    }, s);
+    await wait(1600);
+    await snap(`props_${k}`);
   }
 }
 else if (scenario === 'drift') {
